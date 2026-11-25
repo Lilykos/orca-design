@@ -1,11 +1,11 @@
 # QA record — 0.1.0 (2026-11-25, Orca 1.4.274, macOS)
 
-Live = checked in the running Orca app (dev plugin, playground workspace or this repo before the move).
+Live = checked in the running Orca app (dev plugin, with Paseo-made designs in a separate workspace).
 Unit = covered by `orca plugin test .` only.
 
 | Check | How | Result |
 |---|---|---|
-| Folio designs open unchanged (3, 6 and 19 artboards) | Live | ✅ render, runtime ready, sizes reported |
+| Paseo-made designs open unchanged (3, 6 and 19 artboards) | Live | ✅ render, runtime ready, sizes reported |
 | Page edited on disk reloads its board | Live | ✅ under 2 s, no full reload |
 | Labels fit at 6–25% zoom; no overlap across rows | Live | ✅ |
 | 19-artboard design lays out as a grid | Live | ✅ 5 per row at 10% |

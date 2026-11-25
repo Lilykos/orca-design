@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript (no build step; Orca transpiles), zod 4 (vendored via esbuild), Node `fs`/`zlib`, Orca plugin API 1.10 (Orca ≥ 1.4.259), `orca plugin test` (node:test).
 
-**Spec:** `docs/spec.md`. Feasibility evidence: `spikes/canvas-host/FINDINGS.md`. Upstream source to port from: `~/.paseo/plugins/design-canvas/*/node_modules/paseo-design-canvas/` (called **UP** below; e.g. `UP/server/store.ts`).
+**Spec:** `docs/spec.md`. Feasibility evidence: `docs/spike-findings.md`. Upstream source to port from: `~/.paseo/plugins/design-canvas/*/node_modules/paseo-design-canvas/` (called **UP** below; e.g. `UP/server/store.ts`).
 
 ## Global Constraints
 
@@ -18,14 +18,14 @@
 - `plugin.request` answers and inputs: ≤ 1 MiB. Chunk anything that can be larger at **768 KiB** (`CHUNK = 786_432` chars). `panels.post`: ≤ 256 KiB and 200 per 10 s, so posts carry paths, never content.
 - The worker touches only `realpath(<workspace>/design)` and below (UP `server/paths.ts` rules, symlinks checked).
 - Artboard iframes: `sandbox="allow-scripts"` and UP's `DESIGN_CSP`, unchanged.
-- Keep Paseo's file format byte-compatible (spec "Files"): the folio designs must open unchanged.
+- Keep Paseo's file format byte-compatible (spec "Files"): Paseo-made designs must open unchanged.
 - Keep UP's MIT notice: `LICENSE` lists both copyrights, and each ported file starts with `// Ported from paseo-design-canvas 0.4.1 (MIT, © 2026 961853266hyt).`
 - Style from `--orca-*` CSS variables only (no fixed colours in the chrome) and re-theme on `orca.on('theme')`.
 - English UI only. Port `en.json` and drop `zh-CN`.
 
 ## Review Focus
 
-1. **A page over 1 MiB after inlining** (the folio identity designs inline JPGs): it must load through chunks, not fail with `too_large`. Test: Task 5 `artboard chunks reassemble a 2 MiB page`.
+1. **A page over 1 MiB after inlining** (real identity designs inline JPGs): it must load through chunks, not fail with `too_large`. Test: Task 5 `artboard chunks reassemble a 2 MiB page`.
 2. **The agent rewrites a page while the person drags or edits text:** the write must be refused with `conflict` and the board reloaded, never a silent overwrite. Test: Task 3 `moveElement refuses a stale version`.
 3. **A half-written `design.json` caught by the watcher:** show the parse error in place of the design, then recover on the next write without a reload. Test: Task 5 `design view reports a broken manifest and recovers`.
 4. **A workspace with no `design/` folder, or a non-workspace file:** the canvas shows the empty-canvas brief and creates `design/` only when asked. Test: Task 5 `context reports uninitialized without creating files`.
@@ -69,7 +69,7 @@ editor/
 panel/
   home.html, home.ts        Task 12
 tools/dc.ts                 agent CLI source, bundled to assets/dc.mjs (Task 10)
-tests/fixtures/             copies of one folio design plus small synthetic designs
+tests/fixtures/             small synthetic designs
 **/*.test.ts                next to the code they test
 ```
 
@@ -81,7 +81,7 @@ tests/fixtures/             copies of one folio design plus small synthetic desi
 
 **Files:**
 - Create: `orca-plugin.json`, `package.json`, `tsconfig.json`, `.gitignore`, `scripts/vendor.mjs`, `vendor/zod.js`, `vendor/zod.d.ts`, `LICENSE`, `shared/design.ts`, `shared/tweaks.ts`, `shared/prompts.ts`, `shared/runtime-protocol.ts`, `shared/views.ts`, `worker/index.ts` (empty activate)
-- Create: `tests/fixtures/folio-app-alternatives/` (copy of `~/orca/projects/folio/design/verbatim-app-alternatives/`), `tests/fixtures/minimal/design.json`, `a.html`
+- Create: `tests/fixtures/sample-alternatives/` (a synthetic 6-artboard design; originally a real Paseo design), `tests/fixtures/minimal/design.json`, `a.html`
 - Test: `shared/design.test.ts`
 
 **Interfaces:**
@@ -92,8 +92,8 @@ tests/fixtures/             copies of one folio design plus small synthetic desi
 - [ ] **Step 2:** Write `orca-plugin.json` with the Global Constraints values, `main: "worker/index.ts"` and no contributions yet. `tsconfig.json` extends `./.orca/types/tsconfig.json`, includes `shared worker editor panel tools`, and maps `zod` types through `vendor/zod.d.ts`. Run `orca plugin types . --json`.
 - [ ] **Step 3: Failing test** `shared/design.test.ts`:
   ```ts
-  test('parses the real folio manifest', () => {
-    const m = manifestSchema.parse(JSON.parse(readFileSync('tests/fixtures/folio-app-alternatives/design.json', 'utf8')))
+  test('parses the sample manifest', () => {
+    const m = manifestSchema.parse(JSON.parse(readFileSync('tests/fixtures/sample-alternatives/design.json', 'utf8')))
     assert.equal(m.artboards.length, 6)
   })
   test('rejects duplicate artboard ids', () => {
@@ -117,7 +117,7 @@ tests/fixtures/             copies of one folio design plus small synthetic desi
 - Produces (workspace.ts): `resolveRoot(host, workspaceId: string): Promise<string>`. Throws `HostError('invalid_params')` for an unknown id. It caches the answer for 10 s.
 - Fix #6 lives in `UP/client/runtime.ts` (Task 9), not here.
 
-- [ ] **Step 1: Failing tests:** `listSlugs` on a tmp copy of the fixtures returns `['folio-app-alternatives','minimal']` and ignores `.trash` and dotfolders. `readManifest` on a file holding `{"version":1,` returns `{ manifest: null, error: /JSON/ }`. `resolveInside(root, dir, '../../etc/passwd')` rejects with `PathError`. A symlink from `design/x/a.css` to `/tmp` is refused by `inlineHtml`. `inlineHtml` turns `<img src="assets/p.png">` into a `data:image/png;base64,` URL.
+- [ ] **Step 1: Failing tests:** `listSlugs` on a tmp copy of the fixtures returns `['sample-alternatives','minimal']` and ignores `.trash` and dotfolders. `readManifest` on a file holding `{"version":1,` returns `{ manifest: null, error: /JSON/ }`. `resolveInside(root, dir, '../../etc/passwd')` rejects with `PathError`. A symlink from `design/x/a.css` to `/tmp` is refused by `inlineHtml`. `inlineHtml` turns `<img src="assets/p.png">` into a `data:image/png;base64,` URL.
 - [ ] **Step 2:** Run `orca plugin test . --json` → FAIL.
 - [ ] **Step 3:** Port UP paths/inline/store reads. `resolveRoot` calls `host.call('workspace.list', {})` and matches `id`.
 - [ ] **Step 4:** Tests PASS, then commit `feat(worker): design store reads`.
@@ -220,7 +220,7 @@ tests/fixtures/             copies of one folio design plus small synthetic desi
 
 - [ ] **Step 1: Failing test** `editor/api.test.ts`: with a fake `request` answering `dc.artboard` in three chunks, `getDesign('x')` gives `artboards[0].html` equal to the concatenation, and the fake saw `offset` values `0, CHUNK, 2*CHUNK`.
 - [ ] **Step 2:** FAIL. **Step 3:** Implement `api.ts` and port the client files, with the port header and the changes above. **Step 4:** PASS, `npx tsc -p .` clean.
-- [ ] **Step 5: Visual check.** Copy the fixtures into this repo's `design/`, `orca plugin dev load . --json` (show the approval to the person, approve only with their yes), then `orca plugin shot design-canvas --editor design/canvas.design.json --width 1400 --height 900`. Expected: six Verbatim artboards render, with Mac and iPhone rows. Read the PNG.
+- [ ] **Step 5: Visual check.** Copy the fixtures into this repo's `design/`, `orca plugin dev load . --json` (show the approval to the person, approve only with their yes), then `orca plugin shot design-canvas --editor design/canvas.design.json --width 1400 --height 900`. Expected: six artboards render, with Mac and iPhone rows. Read the PNG.
 - [ ] **Step 6: Default-open check.** Click `design/canvas.design.json` in Orca's explorer: it opens in "Design canvas", not Source. If not, rename the entry to `design/canvas.dcanvas` (and update `CANVAS_ENTRY` and the manifest `extensions`), then re-check.
 - [ ] **Step 7:** Live check: edit an artboard's HTML on disk, and the board reloads within 1 s with no full canvas reload. Commit `feat(editor): canvas in an Orca custom editor`.
 
@@ -249,7 +249,7 @@ tests/fixtures/             copies of one folio design plus small synthetic desi
 - Runtime messages: new `ToRuntime` `{ type: 'pick-step'; dir: 'parent' | 'child' }` and a `pick` reply carrying `crumbs: string[]` (at most 3 labels: `dcId ?? tag`).
 - Produces: `openSendSheet(opts: { text: string; rows: AgentRow[]; preferred: string | null; onSend(terminalId: string): Promise<void>; onLaunch(agent: string): Promise<void> }): void`. It shows the exact text (read-only, monospace), an agent `<select>` (or "No agent running: Launch Claude" when the list is empty), and Send/Cancel.
 
-- [ ] **Step 1: Failing tests:** `anchorText` of the folio book card gives `An Ordinary Wonder · A COLLECTION · IRIS BELL · An Ordinary Wonder · Iris Bell`; `pinPosition` at zoom 0.25 gives a pin of 80 page px (20 on screen) clamped inside the page width; the send sheet with zero rows shows the Launch button and no Send.
+- [ ] **Step 1: Failing tests:** `anchorText` of a book card gives `An Ordinary Wonder · A COLLECTION · IRIS BELL · An Ordinary Wonder · Iris Bell`; `pinPosition` at zoom 0.25 gives a pin of 80 page px (20 on screen) clamped inside the page width; the send sheet with zero rows shows the Launch button and no Send.
 - [ ] **Step 2:** FAIL. **Step 3:** Implement. In the comment popover, ↑/↓ send `pick-step` and the breadcrumb renders above the textarea. "Send N to the agent" first calls `dc.agents`, then opens the sheet with `commentsPrompt(...)`.
 - [ ] **Step 4:** PASS. Manual check: pin a comment at 25%; the pin doesn't cover the element; ↑ selects the grid; Send shows the preview. Commit `fix(canvas): pins, parent picking, anchor text, send preview`.
 
@@ -302,7 +302,7 @@ tests/fixtures/             copies of one folio design plus small synthetic desi
 - Thumbnails: sandboxed iframes scaled with CSS `transform`, lazy-loaded with `IntersectionObserver`.
 
 - [ ] **Step 1: Failing test:** `dc.home` over two mock workspaces, one with two designs, gives 2 rows sorted by `updatedAt` descending; `dc.open` calls `workspace.open`, then `editor.open`, in that order.
-- [ ] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** PASS. `orca plugin shot design-canvas --panel home` shows the folio designs. Click one, and the canvas opens on it. Commit `feat: home panel with recents and composer`.
+- [ ] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** PASS. `orca plugin shot design-canvas --panel home` shows the designs. Click one, and the canvas opens on it. Commit `feat: home panel with recents and composer`.
 
 ## Phase 4: Ship
 
@@ -312,7 +312,7 @@ tests/fixtures/             copies of one folio design plus small synthetic desi
 - Create: `README.md` (install, usage, CLI, security; adapted from UP README), `CHANGELOG.md` (0.1.0), `docs/QA.md`
 - Modify: `orca-plugin.json` (`version: "0.1.0"`, icon `assets/icon.png` drawn fresh, not UP's)
 
-- [ ] **Step 1:** `docs/QA.md` lists the manual checks from Tasks 7–12 plus: open all three folio designs (19-board identity design included) unchanged; undo and redo of a move and a text edit; tweaks hover highlighting on a fixture with tweaks; export, then import into another workspace; trash, then restore.
+- [ ] **Step 1:** `docs/QA.md` lists the manual checks from Tasks 7–12 plus: open three Paseo-made designs (19-board identity design included) unchanged; undo and redo of a move and a text edit; tweaks hover highlighting on a fixture with tweaks; export, then import into another workspace; trash, then restore.
 - [ ] **Step 2:** Run every QA item and tick it in the file. Fix failures under the owning task's tests first.
 - [ ] **Step 3:** `orca plugin test . --json`, `orca plugin check . --json`, `npx tsc -p .` and `orca plugin validate . --json`: all clean. Show `orca plugin inspect . --json` to the person.
 - [ ] **Step 4:** With the person's approval, `orca plugin install` from the folder. Commit `chore: 0.1.0`.

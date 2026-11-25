@@ -14,7 +14,7 @@ async function boot(map: Record<string, string>) {
 
 test('dc.home lists designs from every workspace that uses the canvas, newest first', async () => {
   const a = makeRoot(['minimal'])
-  const b = makeRoot(['folio-app-alternatives'])
+  const b = makeRoot(['sample-alternatives'])
   const plain = makeRoot([])
   await initCanvas(a)
   await initCanvas(b)
@@ -25,7 +25,7 @@ test('dc.home lists designs from every workspace that uses the canvas, newest fi
   utimesSync(path.join(a, 'design/minimal/assets/p.png'), old, old)
   const { worker } = await boot({ wa: a, wb: b, wp: plain })
   const home = await worker.request('dc.home', {})
-  assert.deepEqual(home.designs.map((d) => `${d.ws}/${d.slug}`), ['wb/folio-app-alternatives', 'wa/minimal'])
+  assert.deepEqual(home.designs.map((d) => `${d.ws}/${d.slug}`), ['wb/sample-alternatives', 'wa/minimal'])
   assert.equal(home.workspaces.length, 3)
   await worker.deactivate()
 })

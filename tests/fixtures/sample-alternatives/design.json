@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "title": "Sample \u00b7 App alternatives",
+  "kind": "other",
+  "description": "Synthetic fixture: three directions, desktop and phone.",
+  "artboards": [
+    {
+      "id": "ledger-mac",
+      "title": "01 \u00b7 Ledger \u00b7 Mac",
+      "file": "ledger-mac.html",
+      "width": 1440,
+      "height": 1000,
+      "group": "Mac alternatives"
+    },
+    {
+      "id": "studio-mac",
+      "title": "02 \u00b7 Studio \u00b7 Mac",
+      "file": "studio-mac.html",
+      "width": 1440,
+      "height": 1000,
+      "group": "Mac alternatives"
+    },
+    {
+      "id": "notebook-mac",
+      "title": "03 \u00b7 Notebook \u00b7 Mac",
+      "file": "notebook-mac.html",
+      "width": 1440,
+      "height": 1000,
+      "group": "Mac alternatives"
+    },
+    {
+      "id": "ledger-ios",
+      "title": "01 \u00b7 Ledger \u00b7 iPhone",
+      "file": "ledger-ios.html",
+      "width": 390,
+      "height": 844,
+      "group": "iPhone companions"
+    },
+    {
+      "id": "studio-ios",
+      "title": "02 \u00b7 Studio \u00b7 iPhone",
+      "file": "studio-ios.html",
+      "width": 390,
+      "height": 844,
+      "group": "iPhone companions"
+    },
+    {
+      "id": "notebook-ios",
+      "title": "03 \u00b7 Notebook \u00b7 iPhone",
+      "file": "notebook-ios.html",
+      "width": 390,
+      "height": 844,
+      "group": "iPhone companions"
+    }
+  ]
+}

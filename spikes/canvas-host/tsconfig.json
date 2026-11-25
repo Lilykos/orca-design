@@ -1,1 +1,0 @@
-{ "extends": "./.orca/types/tsconfig.json", "include": ["editor", "src"] }

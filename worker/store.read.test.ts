@@ -8,7 +8,7 @@ test('listSlugs ignores trash, dotfolders and folders without design.json', asyn
   const root = makeRoot()
   mkdirSync(path.join(root, 'design/.trash/old'), { recursive: true })
   mkdirSync(path.join(root, 'design/systems'))
-  assert.deepEqual(await listSlugs(root), ['folio-app-alternatives', 'minimal'])
+  assert.deepEqual(await listSlugs(root), ['minimal', 'sample-alternatives'])
 })
 
 test('readManifest reports half-written JSON', async () => {
@@ -34,9 +34,9 @@ test('readDesignAgents prefers canvas.design.json and falls back to canvas.json'
   assert.deepEqual(await readDesignAgents(root), { minimal: 'orca-session' })
 })
 
-test('summarize counts artboards of the real folio design', async () => {
+test('summarize counts artboards of the sample design', async () => {
   const root = makeRoot()
-  const s = await summarize(root, 'folio-app-alternatives')
+  const s = await summarize(root, 'sample-alternatives')
   assert.equal(s.artboards, 6)
   assert.equal(s.error, null)
 })

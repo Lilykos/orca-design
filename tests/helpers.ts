@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 /** A fresh workspace root whose design/ holds copies of the named fixtures. */
-export function makeRoot(fixtures: string[] = ['folio-app-alternatives', 'minimal']): string {
+export function makeRoot(fixtures: string[] = ['sample-alternatives', 'minimal']): string {
   const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'dc-test-')))
   mkdirSync(path.join(root, 'design'))
   for (const name of fixtures) cpSync(path.join('tests/fixtures', name), path.join(root, 'design', name), { recursive: true })

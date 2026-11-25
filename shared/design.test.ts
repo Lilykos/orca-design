@@ -4,8 +4,8 @@ import { manifestSchema, CANVAS_ENTRY, REQUESTS_DIR, CLI_FILE } from './design.t
 
 const board = (id: string) => ({ id, title: id, file: `${id}.html`, width: 390 })
 
-test('parses the real folio manifest', () => {
-  const m = manifestSchema.parse(JSON.parse(readFileSync('tests/fixtures/folio-app-alternatives/design.json', 'utf8')))
+test('parses the sample manifest', () => {
+  const m = manifestSchema.parse(JSON.parse(readFileSync('tests/fixtures/sample-alternatives/design.json', 'utf8')))
   assert.equal(m.artboards.length, 6)
 })
 

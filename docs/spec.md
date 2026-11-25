@@ -2,8 +2,8 @@
 
 A port of the MIT-licensed Paseo plugin `paseo-design-canvas` 0.4.1
 (github.com/961853266hyt/paseo-plugins, `plugins/design-canvas`, © 2026 961853266hyt) to an
-**Orca plugin**, with fixes for problems seen in real use. Reference screenshots of the original
-are in `docs/reference/paseo-screens/`. Feasibility is proven in `spikes/canvas-host/FINDINGS.md`.
+**Orca plugin**, with fixes for problems seen in real use. Feasibility is recorded in
+`docs/spike-findings.md`.
 
 ## What it does
 
@@ -29,7 +29,7 @@ Everything lives under `design/` in the workspace:
 | `design/<slug>/.requests/<ts>-<kind>.md` | **New.** Each prompt the canvas sends to an agent, kept as a record |
 | `design/.trash/<slug>-<ts>/` | Deleted designs |
 
-The existing designs in `~/orca/projects/folio/design/` must open unchanged.
+Designs made with the Paseo plugin must open unchanged.
 
 ## Surfaces in Orca
 
@@ -51,7 +51,7 @@ comment pins with send, resolve and reopen; text editing in place; element and a
 undo and redo; Tweaks panel with hover highlighting; rename, trash, export and import as zip; an
 empty-canvas brief; the same CSP and sandbox for artboards.
 
-## Fixes and improvements (from real use, see screenshots)
+## Fixes and improvements (from real use)
 
 1. **Labels:** an artboard label never paints wider than its artboard on screen. It drops the size,
    then the group, then truncates the title with an ellipsis.

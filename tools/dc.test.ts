@@ -57,8 +57,8 @@ test('validate names a duplicate artboard id and exits 2', () => {
   assert.match(JSON.stringify(r.out), /Duplicate artboard id a/)
 })
 
-test('validate passes the real folio design', () => {
-  const root = makeRoot(['folio-app-alternatives'])
+test('validate passes the sample design', () => {
+  const root = makeRoot(['sample-alternatives'])
   assert.equal(dc(root, ['validate']).code, 0)
 })
 
