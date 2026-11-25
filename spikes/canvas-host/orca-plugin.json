@@ -1,0 +1,23 @@
+{
+  "manifestVersion": 2,
+  "id": "dc-spike",
+  "name": "DC Spike",
+  "version": "0.0.1",
+  "description": "Feasibility spike for the design canvas.",
+  "engines": { "orca": ">=1.4.248" },
+  "execution": "trusted-worker",
+  "pluginApi": 1,
+  "main": "src/worker.ts",
+  "contributes": {
+    "customEditors": [
+      {
+        "id": "spike",
+        "title": "Spike canvas",
+        "extensions": [".design.json"],
+        "entry": "editor/main.ts",
+        "frame": "isolated"
+      }
+    ]
+  },
+  "capabilities": [{ "kind": "workspace:read" }]
+}
