@@ -126,6 +126,33 @@ export async function send(host: HostCaller, input: SendInput, now = Date.now())
 }
 
 const TRACK_MS = 30 * 60_000;
+const SESSION_WAIT_MS = 20_000;
+
+/**
+ * Starts an agent on a request about an existing design (Orca: the send sheet's Launch), and
+ * records its session for that design once Orca lists it.
+ */
+export async function launch(
+  host: HostCaller,
+  input: { workspaceId: string; root: string; agent: string; slug: string; kind: RequestKind; text: string },
+  now = Date.now(),
+): Promise<{ terminalId: string; request: string }> {
+  const request = await writeRequest(input.root, input.slug, input.kind, input.text, now);
+  const { terminalId } = (await host.call("agent.launch", { workspaceId: input.workspaceId, agent: input.agent, prompt: pointerLine(request) })) as { terminalId: string };
+  void (async () => {
+    const end = Date.now() + SESSION_WAIT_MS;
+    while (Date.now() < end) {
+      const row = (await listAgents(host, input.workspaceId)).find((candidate) => candidate.terminalId === terminalId);
+      const record = row && recordOf(row);
+      if (record) {
+        await store.rememberDesignAgent(input.root, input.slug, record);
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, RESUME_POLL_MS));
+    }
+  })().catch(() => {});
+  return { terminalId, request };
+}
 
 /**
  * Starts an agent on a brief. When a new design folder appears afterwards, it is recorded as that

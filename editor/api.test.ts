@@ -38,3 +38,23 @@ test('every call names the workspace', async () => {
   await createApi('w9', request).addComment('x', 'hi', {} as any)
   assert.deepEqual(seen[0], ['dc.comment.add', { ws: 'w9', slug: 'x', body: 'hi', anchor: {} }])
 })
+
+test('sendToAgent asks the sheet first and sends nothing when cancelled', async () => {
+  const seen: string[] = []
+  const request: Requester = async (name) => { seen.push(name); return {} }
+  const asked: any[] = []
+  const api = createApi('w1', request, { currentSlug: () => 'x', confirm: async (req) => { asked.push(req); return false } })
+  await assert.rejects(api.sendToAgent('Fix', 'comments'), (e: any) => e.cancelled === true)
+  assert.deepEqual(asked, [{ text: 'Fix', kind: 'comments', slug: 'x' }])
+  assert.deepEqual(seen, [])
+})
+
+test('startDesign hands the sheet the brief, with no design slug', async () => {
+  const asked: any[] = []
+  const api = createApi('w1', async () => ({}), { currentSlug: () => 'x', confirm: async (req) => { asked.push(req); return true } })
+  await api.startDesign('A pricing page')
+  assert.equal(asked[0].slug, null)
+  assert.equal(asked[0].kind, 'new')
+  assert.equal(asked[0].brief, 'A pricing page')
+  assert.match(asked[0].text, /A pricing page/)
+})

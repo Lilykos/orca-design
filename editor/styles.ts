@@ -224,4 +224,17 @@ export const CANVAS_CSS = `
   background: var(--dc-fg); color: var(--dc-bg); box-shadow: 0 6px 18px rgba(0,0,0,.25); max-width: 80%; }
 .dc-muted { color: var(--dc-muted); }
 .dc-side-empty { padding: 10px; color: var(--dc-muted); }
+
+/* Orca additions */
+.dc-crumbs { display: flex; align-items: center; gap: 4px; margin: -2px 0 8px; color: var(--dc-muted); font-size: 12px; min-width: 0; }
+/* Cut from the left: the picked element (last) matters most. */
+.dc-crumb-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.dc-btn.dc-mini { width: 22px; height: 22px; padding: 0; }
+.dc-sheet-veil { position: absolute; inset: 0; z-index: 50; display: grid; place-items: center; background: color-mix(in srgb, var(--dc-bg) 55%, transparent); }
+.dc-sheet { width: min(640px, calc(100% - 48px)); max-height: calc(100% - 48px); display: flex; flex-direction: column; gap: 10px; padding: 16px;
+  border: 1px solid var(--dc-border); border-radius: 10px; background: var(--dc-surface); box-shadow: 0 12px 40px rgba(0,0,0,.35); }
+.dc-sheet h3 { margin: 0; font-size: 14px; }
+.dc-sheet pre { margin: 0; flex: 1; min-height: 120px; overflow: auto; padding: 10px; border-radius: 6px; border: 1px solid var(--dc-border);
+  background: var(--dc-bg); font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+.dc-sheet select { flex: 1; min-width: 0; height: 28px; border-radius: 6px; border: 1px solid var(--dc-border); background: var(--dc-bg); color: var(--dc-fg); font: inherit; }
 `;

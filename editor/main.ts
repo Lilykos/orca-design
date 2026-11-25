@@ -1,8 +1,9 @@
 // The design canvas as an Orca custom editor on design/canvas.design.json. The document itself is
 // only a marker: everything the canvas shows comes from the worker, for the workspace the file is in.
 import "../shared/protocol";
-import type { AgentRow, RequestKind } from "../shared/protocol";
-import { createApi } from "./api";
+import type { AgentRow } from "../shared/protocol";
+import { createApi, type SendRequest } from "./api";
+import { openSendSheet } from "./send-sheet";
 import { type AgentStatus, mountCanvas } from "./canvas";
 import { pickZip } from "./files";
 import { t } from "./i18n";
@@ -67,12 +68,24 @@ async function boot(): Promise<void> {
   let currentSlug: string | null = await storageGet(`last:${ws}`);
   const api = createApi(ws, request, {
     currentSlug: () => currentSlug,
-    async needAgent(_text: string, _kind: RequestKind, reason) {
-      throw new Error(
-        reason === "no-agent"
-          ? "No agent is running in this workspace. Start one (for example Claude), then send again."
-          : "Several agents are running in this workspace; pick one in the send sheet.",
-      );
+    async confirm(req: SendRequest) {
+      const { rows, preferred } = (await request("dc.agents", { ws, ...(req.slug ? { slug: req.slug } : {}) })) as {
+        rows: AgentRow[];
+        preferred: string | null;
+      };
+      return openSendSheet({
+        host: document.querySelector(".dc-root") ?? document.body,
+        text: req.text,
+        rows,
+        preferred,
+        async onSend(terminalId) {
+          await request("dc.send", { ws, ...(req.slug ? { slug: req.slug } : {}), kind: req.kind, text: req.text, terminalId });
+        },
+        async onLaunch(agent) {
+          if (req.slug) await request("dc.launch", { ws, slug: req.slug, kind: req.kind, text: req.text, agent });
+          else await request("dc.start", { ws, brief: req.brief ?? req.text, agent });
+        },
+      });
     },
     async saveFile(fileName, bytes) {
       await orca.files?.saveAs({ suggestedName: fileName, mimeType: "application/zip", data: bytes.slice().buffer });

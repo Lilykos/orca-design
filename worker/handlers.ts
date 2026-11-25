@@ -234,6 +234,16 @@ export function registerHandlers(orca: OrcaWorkerApi, deps: HandlerDeps = { now:
   );
 
   handle(
+    "dc.launch",
+    design.extend({
+      kind: z.enum(["comments", "tweaks", "apply-tweaks", "new"]),
+      text: z.string().min(1).max(200_000),
+      agent: z.string().min(1).max(40),
+    }),
+    async ({ ws: workspaceId, slug, kind, text, agent }, root) => agents.launch(host, { workspaceId, root, agent, slug, kind, text }, deps.now()),
+  );
+
+  handle(
     "dc.start",
     ws.extend({ brief: z.string().trim().min(1).max(20_000), kind: designKindSchema.optional(), agent: z.string().min(1).max(40) }),
     async ({ ws: workspaceId, brief, kind, agent }, root) =>

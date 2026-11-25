@@ -102,3 +102,24 @@ test('dc.send without a design writes under design/.requests', async () => {
   assert.match(out.request, /^design\/\.requests\/\d{8}-\d{6}-new\.md$/)
   await worker.deactivate()
 })
+
+test('dc.launch starts an agent on a design request and records its session for the design', async () => {
+  const root = makeRoot(['minimal'])
+  let launched = false
+  const { host, worker } = await boot(root, {
+    'agents.list': () => listed(launched ? [row({ terminalId: 'L1', sessionId: 'sess-L' })] : []),
+    'agent.launch': () => { launched = true; return { terminalId: 'L1' } }
+  })
+  const out = await worker.request('dc.launch', { ws: 'w1', slug: 'minimal', kind: 'comments', text: 'Fix it', agent: 'claude' })
+  assert.equal(out.terminalId, 'L1')
+  assert.match((host.callsOf('agent.launch') as any[])[0].prompt, /^Read design\/minimal\/\.requests\/.+-comments\.md and do what it asks\.$/)
+  const end = Date.now() + 3000
+  let agents: Record<string, string> = {}
+  while (Date.now() < end) {
+    try { agents = JSON.parse(readFileSync(path.join(root, 'design/canvas.design.json'), 'utf8')).agents ?? {} } catch {}
+    if (agents.minimal) break
+    await new Promise((r) => setTimeout(r, 50))
+  }
+  assert.equal(agents.minimal, 'claude:sess-L')
+  await worker.deactivate()
+})

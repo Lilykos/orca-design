@@ -9,11 +9,28 @@ import { newDesignPrompt } from "../shared/prompts";
 
 export type Requester = (name: string, input: unknown) => Promise<any>;
 
+export interface SendRequest {
+  text: string;
+  kind: RequestKind;
+  /** null for a new design's brief. */
+  slug: string | null;
+  /** The person's own words, for a new design. */
+  brief?: string;
+}
+
+/** The person closed the send sheet: nothing was sent, and nothing should be marked sent. */
+export function cancelled(): Error {
+  return Object.assign(new Error("cancelled"), { cancelled: true });
+}
+
 export interface ApiHooks {
   /** The design the canvas shows, for messages to the agent. */
   currentSlug(): string | null;
-  /** Called when the worker needs the person to choose or launch an agent; resolves once sent. */
-  needAgent?(text: string, kind: RequestKind, reason: "choose-agent" | "no-agent"): Promise<void>;
+  /**
+   * Shows the person the exact request and lets them pick (or start) the agent; resolves true once
+   * it was sent, false when they cancelled. Without it, requests go straight to dc.send.
+   */
+  confirm?(request: SendRequest): Promise<boolean>;
   /** Saves a file the person exported. */
   saveFile?(fileName: string, bytes: Uint8Array): Promise<void>;
   pickZip?(): Promise<Blob | null>;
@@ -46,13 +63,6 @@ async function inBatches<T, R>(items: readonly T[], size: number, fn: (item: T) 
   return out;
 }
 
-function reasonOf(error: unknown): "choose-agent" | "no-agent" | null {
-  const message = error instanceof Error ? error.message : String(error);
-  if (message.includes("choose-agent")) return "choose-agent";
-  if (message.includes("no-agent")) return "no-agent";
-  return null;
-}
-
 function base64ToBytes(base64: string): Uint8Array {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -63,15 +73,16 @@ function base64ToBytes(base64: string): Uint8Array {
 export function createApi(ws: string, request: Requester, hooks: ApiHooks = { currentSlug: () => null }): CanvasApi {
   const call = (name: string, input: Record<string, unknown> = {}) => request(name, { ws, ...input });
 
-  async function sendToAgent(text: string, kind: RequestKind = "comments"): Promise<void> {
-    const slug = kind === "new" ? null : hooks.currentSlug();
-    try {
-      await call("dc.send", { ...(slug ? { slug } : {}), kind, text });
-    } catch (error) {
-      const reason = reasonOf(error);
-      if (!reason || !hooks.needAgent) throw error;
-      await hooks.needAgent(text, kind, reason);
+  async function deliver(request: SendRequest): Promise<void> {
+    if (hooks.confirm) {
+      if (!(await hooks.confirm(request))) throw cancelled();
+      return;
     }
+    await call("dc.send", { ...(request.slug ? { slug: request.slug } : {}), kind: request.kind, text: request.text });
+  }
+
+  async function sendToAgent(text: string, kind: RequestKind = "comments"): Promise<void> {
+    await deliver({ text, kind, slug: kind === "new" ? null : hooks.currentSlug() });
   }
 
   return {
@@ -104,7 +115,7 @@ export function createApi(ws: string, request: Requester, hooks: ApiHooks = { cu
     sendToAgent,
     async startDesign(brief) {
       await call("dc.init");
-      await sendToAgent(newDesignPrompt(brief), "new");
+      await deliver({ text: newDesignPrompt(brief), kind: "new", slug: null, brief });
     },
     renameDesign: async (slug, title) => {
       await call("dc.rename", { slug, title });

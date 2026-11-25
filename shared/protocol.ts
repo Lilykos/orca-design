@@ -94,6 +94,10 @@ declare module "orca" {
       input: WsInput & { slug?: string; kind: RequestKind; text: string; terminalId?: string };
       output: { terminalId: string; request: string };
     };
+    "dc.launch": {
+      input: DesignInput & { kind: RequestKind; text: string; agent: string };
+      output: { terminalId: string; request: string };
+    };
     "dc.start": {
       input: WsInput & { brief: string; kind?: string; agent: string };
       output: { terminalId: string; request: string };

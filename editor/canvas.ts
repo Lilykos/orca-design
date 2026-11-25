@@ -135,7 +135,16 @@ type UndoEntry =
   | { kind: "artboard"; boardId: string; before: { x: number; y: number } | null; after: { x: number; y: number } | null };
 
 type Popover =
-  | { kind: "new"; boardId: string; picked: Picked; viewport: { x: number; y: number; width: number; height: number } }
+  | {
+      kind: "new";
+      boardId: string;
+      picked: Picked;
+      viewport: { x: number; y: number; width: number; height: number };
+      /** Orca: labels from the outermost to the picked element, for stepping to its parent. */
+      crumbs: string[];
+      /** Orca: what the person typed, kept while they step between parent and child. */
+      draft: string;
+    }
   | { kind: "existing"; id: string; boardId: string; viewport: { x: number; y: number; width: number; height: number }; editing: boolean };
 
 function describe(error: unknown): string {
@@ -334,6 +343,8 @@ export function mountCanvas(options: CanvasOptions): CanvasHandle {
   }
 
   function fail(error: unknown): void {
+    // Orca: closing the send sheet is not an error.
+    if ((error as { cancelled?: boolean } | null)?.cancelled) return;
     toast(t("error", { error: describe(error) }));
   }
 
@@ -758,16 +769,36 @@ export function mountCanvas(options: CanvasOptions): CanvasHandle {
       const head = el("div", "dc-popover-head");
       const target = state.picked.dcId ? state.picked.dcId : `<${state.picked.tag}>`;
       head.append(el("b", "", t("newComment")), el("span", "", target));
-      node.append(
-        head,
-        composer("", t("addComment"), async (text) => {
+      // Orca: step to the parent (↑) or back to the child (↓), also with Alt+↑/↓ while typing.
+      const board = boards.get(state.boardId);
+      const step = (dir: "parent" | "child") => {
+        if (board) post(board, { type: "pick-step", dir });
+      };
+      const crumbs = el("div", "dc-crumbs");
+      crumbs.append(
+        // LTR marks keep the reading order under the right-to-left ellipsis trick in the CSS.
+        el("span", "dc-crumb-path", `\u200e${state.crumbs.length ? state.crumbs.join(" › ") : target}\u200e`),
+        button(t("pickParent"), "arrowUp", () => step("parent"), "dc-btn dc-icon dc-mini"),
+        button(t("pickChild"), "arrowDown", () => step("child"), "dc-btn dc-icon dc-mini"),
+      );
+      const box = composer(state.draft, t("addComment"), async (text) => {
           if (!slug) return;
           const comment = await api.addComment(slug, text, { artboardId: state.boardId, ...state.picked });
           comments = [...comments, comment];
           closePopover();
           refreshComments();
-        }, closePopover),
-      );
+        }, closePopover);
+      const area = box.querySelector("textarea");
+      area?.addEventListener("input", () => {
+        state.draft = area.value;
+      });
+      area?.addEventListener("keydown", (event) => {
+        if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+        event.preventDefault();
+        step(event.key === "ArrowUp" ? "parent" : "child");
+      });
+      node.append(head, crumbs, box);
+      area?.focus();
     } else {
       const comment = comments.find((candidate) => candidate.id === state.id);
       if (!comment) return;
@@ -1916,7 +1947,17 @@ export function mountCanvas(options: CanvasOptions): CanvasHandle {
         resize(board, message.height);
         break;
       case "pick":
-        if (mode === "comment") openPopover({ kind: "new", boardId: board.view.id, picked: message.picked, viewport: message.viewport });
+        if (mode === "comment") {
+          const current = popover?.state.kind === "new" && popover.state.boardId === board.view.id ? popover.state : null;
+          if (current) {
+            current.picked = message.picked;
+            current.viewport = message.viewport;
+            current.crumbs = message.crumbs ?? [];
+            renderPopover();
+          } else {
+            openPopover({ kind: "new", boardId: board.view.id, picked: message.picked, viewport: message.viewport, crumbs: message.crumbs ?? [], draft: "" });
+          }
+        }
         break;
       case "pin":
         openPopover({ kind: "existing", id: message.id, boardId: board.view.id, viewport: message.viewport, editing: false });

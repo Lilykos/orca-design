@@ -1,6 +1,7 @@
 // Ported from paseo-design-canvas 0.4.1 (MIT, © 2026 961853266hyt).
 import { PROTOCOL_MARK } from "../shared/runtime-protocol";
 import { COMMENT_CURSOR } from "./cursors";
+import { JOIN_TEXTS_SRC, PIN_POSITION_SRC } from "./runtime-helpers";
 
 /**
  * Runs inside every artboard's iframe. Plain JavaScript in a string, not a compiled function: a
@@ -12,6 +13,8 @@ import { COMMENT_CURSOR } from "./cursors";
  * It only ever talks to its parent window.
  */
 export const RUNTIME_SOURCE = String.raw`(function () {
+  ${JOIN_TEXTS_SRC}
+  ${PIN_POSITION_SRC}
   "use strict";
   var MARK = ${JSON.stringify(PROTOCOL_MARK)};
   var COMMENT_CURSOR = ${JSON.stringify(COMMENT_CURSOR)};
@@ -330,11 +333,42 @@ export const RUNTIME_SOURCE = String.raw`(function () {
     });
   }
 
+  /** Each visible text piece of the element, for joinTexts. */
+  function textOf(el) {
+    var pieces = [];
+    var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    var node;
+    while ((node = walker.nextNode()) && pieces.length < 80) {
+      var parent = node.parentElement;
+      if (parent && /^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE)$/.test(parent.tagName)) continue;
+      pieces.push(node.data);
+    }
+    return joinTexts(pieces);
+  }
+
+  /** Up to three labels from the outermost to the element: its data-dc-id, else its tag. */
+  function crumbsOf(el) {
+    var out = [];
+    for (var at = el; at && at !== document.body && at !== document.documentElement && out.length < 3; at = at.parentElement) {
+      out.unshift(at.getAttribute("data-dc-id") || at.tagName.toLowerCase());
+    }
+    return out;
+  }
+
+  /** The picked element's children the person stepped up from, so ↓ can go back down. */
+  var pickTrail = [];
+
+  function postPick(el) {
+    picked = el;
+    schedule();
+    post({ type: "pick", picked: describe(el), viewport: viewRect(el), crumbs: crumbsOf(el) });
+  }
+
   function describe(el) {
     var info = {
       path: cssPath(el),
       tag: el.tagName.toLowerCase(),
-      text: clip(el.innerText || el.textContent, 200),
+      text: textOf(el),
       html: String(el.outerHTML || "").slice(0, 1200),
       rect: pageRect(el)
     };
@@ -587,8 +621,8 @@ export const RUNTIME_SOURCE = String.raw`(function () {
       ".sel i{position:absolute;width:8px;height:8px;margin:-4px 0 0 -4px;background:#fff;border:1.5px solid #0d99ff;box-sizing:border-box}",
       ".sel.text{border-radius:2px}.sel.text i{display:none}",
       ".sel i:nth-child(1){left:0;top:0}.sel i:nth-child(2){left:100%;top:0}.sel i:nth-child(3){left:0;top:100%}.sel i:nth-child(4){left:100%;top:100%}",
-      ".pin{position:absolute;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:12px 12px 12px 2px;",
-      "color:#fff;font:600 12px/24px system-ui,sans-serif;text-align:center;pointer-events:auto;cursor:pointer;",
+      ".pin{position:absolute;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:10px 10px 10px 2px;",
+      "color:#fff;font:600 11px/20px system-ui,sans-serif;text-align:center;pointer-events:auto;cursor:pointer;",
       "box-shadow:0 1px 3px rgba(0,0,0,.35);border:1.5px solid #fff;box-sizing:border-box;user-select:none}",
       ".pin.resolved{opacity:.55}",
       ".veil{position:fixed;left:0;top:0;pointer-events:none;display:none}",
@@ -658,9 +692,9 @@ export const RUNTIME_SOURCE = String.raw`(function () {
       dot.className = "pin" + (pin.id === selectedId ? " selected" : "") + (pin.status === "resolved" ? " resolved" : "");
       dot.style.background = COLORS[pin.status] || COLORS.pending;
       dot.style.transform = "scale(" + scale * (pin.id === selectedId ? 1.25 : 1) + ")";
-      var inset = 14 * scale;
-      dot.style.left = Math.min(Math.max(rect.x + rect.width, inset), maxX - inset) + "px";
-      dot.style.top = Math.max(rect.y, inset) + "px";
+      var spot = pinPosition(rect, maxX, scale);
+      dot.style.left = spot.x + "px";
+      dot.style.top = spot.y + "px";
       dot.textContent = String(pin.number);
       dot.title = "#" + pin.number;
       dot.addEventListener("click", function (event) {
@@ -749,6 +783,17 @@ export const RUNTIME_SOURCE = String.raw`(function () {
       guides = !!data.on;
     } else if (data.type === "zoom") {
       scale = data.zoom > 0 ? 1 / data.zoom : 1;
+    } else if (data.type === "pick-step") {
+      if (!picked || !picked.isConnected) return;
+      if (data.dir === "parent") {
+        var up = picked.parentElement;
+        if (!up || up === document.documentElement || isOurs(up)) return;
+        pickTrail.push(picked);
+        postPick(up);
+      } else if (data.dir === "child" && pickTrail.length) {
+        var down = pickTrail.pop();
+        if (down && down.isConnected) postPick(down);
+      }
     } else if (data.type === "clear-selection") {
       picked = null;
       selected = null;
@@ -851,9 +896,8 @@ export const RUNTIME_SOURCE = String.raw`(function () {
       event.stopPropagation();
       var el = target(event.target, event.altKey);
       if (!el) return;
-      picked = el;
-      schedule();
-      post({ type: "pick", picked: describe(el), viewport: viewRect(el) });
+      pickTrail = [];
+      postPick(el);
       return;
     }
     var link = event.target && event.target.closest ? event.target.closest("a[href]") : null;

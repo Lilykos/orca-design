@@ -38,6 +38,8 @@ export type ToRuntime =
   /** The canvas zoom, so pins and outlines keep their size on screen. */
   | { mark: typeof PROTOCOL_MARK; type: "zoom"; zoom: number }
   | { mark: typeof PROTOCOL_MARK; type: "clear-selection" }
+  /** Comment mode: pick the parent of the picked element, or go back down to the child. */
+  | { mark: typeof PROTOCOL_MARK; type: "pick-step"; dir: "parent" | "child" }
   /** Sets inline style on a named element, for undo and redo. */
   | { mark: typeof PROTOCOL_MARK; type: "set-style"; dcId: string; style: Record<string, string> }
   /** Sets a text node's text, for undo and redo. */
@@ -65,7 +67,14 @@ export const fromRuntimeSchema = z.discriminatedUnion("type", [
   z.object({ ...base, type: z.literal("ready"), height: z.number() }),
   z.object({ ...base, type: z.literal("size"), height: z.number() }),
   /** `viewport` is the element's box in the iframe's viewport, for placing the comment box. */
-  z.object({ ...base, type: z.literal("pick"), picked: pickedSchema, viewport: rectSchema }),
+  z.object({
+    ...base,
+    type: z.literal("pick"),
+    picked: pickedSchema,
+    viewport: rectSchema,
+    /** Up to three labels, outermost first, ending with the picked element (Orca). */
+    crumbs: z.array(z.string().max(120)).max(3).optional(),
+  }),
   z.object({ ...base, type: z.literal("pin"), id: z.string(), viewport: rectSchema }),
   z.object({
     ...base,
