@@ -29,7 +29,11 @@ import {
   bounds,
   centerOn,
   DEFAULT_PAGE_HEIGHT,
+  fitLabel,
   fitView,
+  keepCenter,
+  labelSpaceFor,
+  maxRowWidth,
   layoutBoards,
   MAX_PAGE_HEIGHT,
   type Placed,
@@ -121,6 +125,8 @@ interface Board {
   tweakCounts: Record<string, number> | null;
   /** On the label: how many elements of this page the hovered tweak drives. */
   badge: HTMLSpanElement | null;
+  /** The zoom the label was last fitted at. */
+  labelZoom: number;
 }
 
 type UndoEntry =
@@ -374,6 +380,7 @@ export function mountCanvas(options: CanvasOptions): CanvasHandle {
     world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`;
     zoomLabel.textContent = `${Math.round(view.zoom * 100)}%`;
     for (const board of boards.values()) board.label.style.transform = `scale(${1 / view.zoom})`;
+    queueLabels();
     positionPopover();
   }
 
@@ -411,15 +418,16 @@ export function mountCanvas(options: CanvasOptions): CanvasHandle {
     layoutQueued = false;
     if (!design?.manifest) return;
     const order = design.artboards.map((artboard) => boards.get(artboard.id)).filter((b): b is Board => !!b);
-    const placed = layoutBoards(
-      order.map((board) => ({
+    laidOutSpace = labelSpaceFor(view.zoom);
+    const boardSizes = order.map((board) => ({
         id: board.view.id,
         width: board.view.width,
         height: board.height,
         ...(board.view.group !== undefined ? { group: board.view.group } : {}),
         ...(board.view.x !== undefined && board.view.y !== undefined ? { x: board.view.x, y: board.view.y } : {}),
-      })),
-    );
+      }));
+    const { width: vw, height: vh } = viewportSize();
+    const placed = layoutBoards(boardSizes, maxRowWidth(boardSizes, vw > 0 && vh > 0 ? vw / vh : undefined), laidOutSpace);
     for (const rect of placed) {
       const board = boards.get(rect.id);
       if (!board) continue;
@@ -453,8 +461,40 @@ export function mountCanvas(options: CanvasOptions): CanvasHandle {
     const n = tweakShown && board.tweakCounts ? board.tweakCounts[tweakShown] ?? 0 : 0;
     board.badge.textContent = String(n);
     board.badge.classList.toggle("dc-on", n > 0);
-    board.label.append(el("b", "", artboard.title), board.badge, el("span", "", size));
-    if (artboard.group) board.label.append(el("span", "", artboard.group));
+    // Orca: the label never paints wider than its artboard on screen (see fitLabel).
+    const fitted = fitLabel(
+      { title: artboard.title, size, ...(artboard.group ? { group: artboard.group } : {}) },
+      Math.max(24, artboard.width * view.zoom),
+      measureLabel,
+    );
+    const title = el("b", "", fitted.title);
+    if (fitted.title !== artboard.title) title.title = artboard.title;
+    board.label.append(title, board.badge);
+    if (fitted.size) board.label.append(el("span", "", size));
+    if (fitted.group && artboard.group) board.label.append(el("span", "", artboard.group));
+    board.labelZoom = view.zoom;
+  }
+
+  let measureContext: CanvasRenderingContext2D | null = null;
+  function measureLabel(text: string): number {
+    measureContext ??= doc.createElement("canvas").getContext("2d");
+    if (!measureContext) return text.length * 7;
+    measureContext.font = `600 13px ${win!.getComputedStyle(root).fontFamily || "system-ui"}`;
+    return measureContext.measureText(text).width;
+  }
+
+  /** The label space the current layout was made with; zooming far enough re-lays the rows. */
+  let laidOutSpace = 0;
+  let labelsQueued = false;
+  function queueLabels(): void {
+    if (labelsQueued) return;
+    labelsQueued = true;
+    win!.requestAnimationFrame(() => {
+      labelsQueued = false;
+      for (const board of boards.values()) if (board.labelZoom !== view.zoom) boardLabel(board);
+      const wanted = labelSpaceFor(view.zoom);
+      if (laidOutSpace && Math.abs(wanted - laidOutSpace) / laidOutSpace > 0.15) queueLayout();
+    });
   }
 
   function loadFrame(board: Board): void {
@@ -502,6 +542,7 @@ export function mountCanvas(options: CanvasOptions): CanvasHandle {
       editing: false,
       tweakCounts: null,
       badge: null,
+      labelZoom: 0,
     };
     label.addEventListener("pointerdown", (event) => startBoardDrag(board, event));
     boardLabel(board);
@@ -2029,9 +2070,17 @@ export function mountCanvas(options: CanvasOptions): CanvasHandle {
     refreshComments();
   });
 
+  // Orca: UP re-fit on every resize, so opening the side panel changed the zoom. Once a design is
+  // on screen, a resize keeps the zoom and the point at the centre.
+  let lastSize = viewportSize();
   const resizeObserver = new win.ResizeObserver(() => {
-    if (!userMoved) fit();
+    const size = viewportSize();
+    const shown = [...boards.values()].some((board) => board.placed);
+    if (shown && (lastSize.width > 0 || lastSize.height > 0)) {
+      setView(keepCenter(view, lastSize, size), true);
+    } else if (!userMoved) fit();
     else positionPopover();
+    lastSize = size;
   });
   resizeObserver.observe(viewport);
 
