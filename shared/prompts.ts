@@ -1,5 +1,10 @@
 // Ported from paseo-design-canvas 0.4.1 (MIT, © 2026 961853266hyt).
-import { type Comment, DESIGN_DIR, type DesignKind, type Manifest } from "./design";
+import { CLI_FILE, type Comment, DESIGN_DIR, type DesignKind, type Manifest } from "./design";
+
+/** How an agent runs the canvas CLI from the workspace root (Orca: Paseo gave agents tools instead). */
+export const CLI = `node ${DESIGN_DIR}/${CLI_FILE}`;
+/** The conventions agents follow; design/README.md may be a Paseo or hand-written file. */
+export const GUIDE_PATH = `${DESIGN_DIR}/.canvas/GUIDE.md`;
 import { cssValue, effectiveValue, prune, TWEAKS_CSS, type TweakValues } from "./tweaks";
 
 /** The agent label that gives an agent the design tools even before its workspace uses the canvas. */
@@ -30,11 +35,13 @@ export function formatComment(comment: Comment, manifest: Manifest | null): stri
 export function commentsPrompt(slug: string, manifest: Manifest | null, comments: readonly Comment[]): string {
   const title = manifest ? `"${manifest.title}" ` : "";
   return [
-    `Please revise the design ${title}in ${DESIGN_DIR}/${slug}/ for these ${comments.length === 1 ? "comment" : `${comments.length} comments`} from the Design canvas:`,
+    `Please revise the design ${title}in ${DESIGN_DIR}/${slug}/ for ${comments.length === 1 ? "this comment" : `these ${comments.length} comments`} from the Design canvas:`,
     "",
     comments.map((comment) => formatComment(comment, manifest)).join("\n\n"),
     "",
-    `Keep existing data-dc-id attributes. When done, call design_resolve_comments for "${slug}" with each comment you handled and one line on what you changed for it. Without that tool, mark them resolved in ${DESIGN_DIR}/${slug}/comments.json as ${DESIGN_DIR}/README.md describes.`,
+    `Keep existing data-dc-id attributes. When done, mark each comment you handled resolved, with one line on what you changed for it:`,
+    "",
+    `${CLI} resolve ${slug} ${comments.map((comment) => `${comment.number} "<what you changed>"`).join(" ")}`,
   ].join("\n");
 }
 
@@ -52,9 +59,9 @@ export function newDesignPrompt(brief: string, kind?: DesignKind): string {
     "Create a new design on the Design canvas:",
     "",
     brief.trim(),
-    ...(kind ? ["", `Make it a ${KIND_NAMES[kind]} (kind "${kind}" in design_create).`] : []),
+    ...(kind ? ["", `Make it a ${KIND_NAMES[kind]} (kind "${kind}").`] : []),
     "",
-    `Use design_create to set it up (read ${DESIGN_DIR}/README.md for the conventions), then write each artboard as a complete, self-contained HTML page with local CSS and assets only. Give the elements I might comment on a data-dc-id. When the request leaves room for interpretation, show 2 or 3 variants as artboards in one group.`,
+    `Read ${GUIDE_PATH} for the conventions, set the design up with \`${CLI} create <slug> '<json>'\` (the guide shows the JSON), then write each artboard as a complete, self-contained HTML page with local CSS and assets only. Give the elements I might comment on a data-dc-id. When the request leaves room for interpretation, show 2 or 3 variants as artboards in one group. Finish with \`${CLI} validate\`.`,
   ].join("\n");
 }
 
@@ -83,7 +90,7 @@ export function applyTweaksPrompt(slug: string, manifest: Manifest, values: Twea
     "",
     lines.join("\n"),
     "",
-    `Set each variable to its new value in the pages' CSS and make it that tweak's default with design_set_tweaks (or in design.json), so the design looks the same without ${TWEAKS_CSS}. Change nothing else.`,
+    `Set each variable to its new value in the pages' CSS and make it that tweak's default with \`${CLI} tweaks ${slug} '<json list>'\` (or in design.json), so the design looks the same without ${TWEAKS_CSS}. Change nothing else.`,
   ].join("\n");
 }
 
@@ -94,6 +101,6 @@ export function tweaksPrompt(slug: string, manifest: Manifest | null): string {
   return [
     `Please add tweaks to the design ${title}in ${DESIGN_DIR}/${slug}/: the 3 to 6 values most worth tuning by hand, such as the accent color, spacing, corner radius, type scale or a layout switch.${existing}`,
     "",
-    `Make the pages read each one from a CSS custom property on :root, declare them with design_set_tweaks (or in the "tweaks" list of design.json, as ${DESIGN_DIR}/README.md describes), keep each default equal to the value in the CSS, and link ${TWEAKS_CSS} last in each page's <head>. Don't change how the design looks at the defaults.`,
+    `Make the pages read each one from a CSS custom property on :root, declare them with \`${CLI} tweaks ${slug} '<json list>'\` (as ${GUIDE_PATH} describes), keep each default equal to the value in the CSS, and link ${TWEAKS_CSS} last in each page's <head>. Don't change how the design looks at the defaults.`,
   ].join("\n");
 }

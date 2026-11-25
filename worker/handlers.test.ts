@@ -100,8 +100,15 @@ test('watch posts once per burst, naming the design', async () => {
   const root = makeRoot(['minimal'])
   const worker = await boot(root)
   await worker.request('dc.watch', { ws: 'w1' })
-  await until(() => worker.posts.some(isCatchUp), 2000)
-  await new Promise((r) => setTimeout(r, 200))
+  // Wait until FSEvents really delivers (a probe write shows up), however slow it is under load.
+  const probe = path.join(root, 'design/minimal/probe.txt')
+  const seesProbe = () => worker.posts.some((p) => JSON.stringify(p.payload) === JSON.stringify({ ws: 'w1', slugs: ['minimal'], list: false }))
+  for (let i = 0; i < 40 && !seesProbe(); i++) {
+    writeFileSync(probe, String(i))
+    await until(seesProbe, 250)
+  }
+  assert.ok(seesProbe(), 'the watcher never delivered a probe write')
+  await new Promise((r) => setTimeout(r, 400))
   const armed = worker.posts.length
   const page = path.join(root, 'design/minimal/a.html')
   for (let i = 0; i < 3; i++) writeFileSync(page, `<p data-dc-id="p">v${i}</p>`)

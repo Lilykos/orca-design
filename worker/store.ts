@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   CANVAS_ENTRY,
   CANVAS_FILE,
+  CLI_FILE,
   canvasFileSchema,
   COMMENTS_FILE,
   type Anchor,
@@ -35,7 +36,8 @@ import {
   usesVariable,
 } from "../shared/tweaks";
 import type { ArtboardView, DesignSummary, DesignView } from "../shared/views";
-import { DESIGN_GUIDE } from "./guide";
+import { DESIGN_GUIDE, GUIDE_START } from "./guide";
+import { fileURLToPath } from "node:url";
 import { findByDcId, replaceText, setInlineStyle } from "./html-patch";
 import { inlineHtml } from "./inline";
 import { designDir, designRoot, resolveInside } from "./paths";
@@ -119,18 +121,43 @@ export async function readCanvasEntry(root: string): Promise<string | null> {
   }
 }
 
-/** How every version of the guide starts, so an older copy of it can be told from a file the user wrote. */
-const GUIDE_START = "# Designs\n\nThis folder holds designs shown on the Design canvas in Paseo.";
-
-/** Writes design/README.md when it is missing or an older version of the guide; a README of the user's stays. */
-export async function refreshGuide(root: string): Promise<void> {
-  const readme = path.join(designRoot(root), README_FILE);
-  let current: string | null = null;
+/** The bundled agent CLI that ships with the plugin; absent when this code runs inside the CLI itself. */
+function cliAsset(): string | null {
   try {
-    current = await readFile(readme, "utf8");
+    return fileURLToPath(new URL("../assets/dc.mjs", import.meta.url));
+  } catch {
+    return null;
+  }
+}
+
+async function readOrNull(file: string): Promise<string | null> {
+  try {
+    return await readFile(file, "utf8");
   } catch (error) {
     if (!isMissing(error)) throw error;
+    return null;
   }
+}
+
+async function writeIfChanged(file: string, text: string): Promise<void> {
+  if ((await readOrNull(file)) === text) return;
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFileAtomic(file, text);
+}
+
+/**
+ * Keeps design/.canvas/ current (the agents' guide and CLI) and writes design/README.md when it is
+ * missing or an older copy of this guide. Orca: a README the user wrote, or Paseo's guide, stays,
+ * because agents are pointed at .canvas/GUIDE.md.
+ */
+export async function refreshGuide(root: string): Promise<void> {
+  const base = designRoot(root);
+  await writeIfChanged(path.join(base, ".canvas", "GUIDE.md"), DESIGN_GUIDE);
+  const asset = cliAsset();
+  const cli = asset ? await readOrNull(asset) : null;
+  if (cli) await writeIfChanged(path.join(base, CLI_FILE), cli);
+  const readme = path.join(base, README_FILE);
+  const current = await readOrNull(readme);
   if (current === DESIGN_GUIDE || (current !== null && !current.startsWith(GUIDE_START))) return;
   await writeFileAtomic(readme, DESIGN_GUIDE);
 }

@@ -72,20 +72,63 @@ export async function listAgents(host: HostCaller, workspaceId: string): Promise
   }));
 }
 
-const RESUME_POLL_MS = 500;
-const RESUME_WAIT_MS = 20_000;
+const POLL_MS = 500;
+/** Under plugin.request's 30 s default, so the caller hears back either way. */
+const READY_WAIT_MS = 25_000;
+
+/**
+ * Waits until Orca lists the terminal as an idle agent, so text typed into it reaches the agent's
+ * prompt. Orca's own launch-prompt delivery raced Claude Code's start-up in practice
+ * ("agent_launch_terminal_not_running_agent"), so launches and resumes type their prompt this way.
+ */
+async function waitForAgent(host: HostCaller, workspaceId: string, terminalId: string): Promise<AgentRow | null> {
+  const end = Date.now() + READY_WAIT_MS;
+  for (;;) {
+    const row = (await listAgents(host, workspaceId)).find((candidate) => candidate.terminalId === terminalId) ?? null;
+    if (row && row.state !== "working") return row;
+    if (Date.now() > end) return row;
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+  }
+}
 
 /** Resumes a recorded session and waits until Orca lists it, idle, in that terminal. */
 async function resume(host: HostCaller, workspaceId: string, recorded: { agent: string; sessionId: string }): Promise<string> {
   const { terminalId } = (await host.call("agent.resume", { workspaceId, ...recorded })) as { terminalId: string };
-  const end = Date.now() + RESUME_WAIT_MS;
+  await waitForAgent(host, workspaceId, terminalId);
+  return terminalId;
+}
+
+const TYPE_RETRY_MS = 1_000;
+const TYPE_WAIT_MS = 20_000;
+
+/**
+ * Types into a just-started agent. Orca lists a new agent before its terminal takes plugin input,
+ * and refuses the text meanwhile (seen live as consent_required), so it is retried for a while.
+ */
+async function typeWhenAccepted(host: HostCaller, terminalId: string, text: string): Promise<void> {
+  const end = Date.now() + TYPE_WAIT_MS;
   for (;;) {
-    const rows = await listAgents(host, workspaceId);
-    const row = rows.find((candidate) => candidate.terminalId === terminalId);
-    if (row && row.state !== "working") return terminalId;
-    if (Date.now() > end) return terminalId;
-    await new Promise((resolve) => setTimeout(resolve, RESUME_POLL_MS));
+    try {
+      await host.call("terminal.sendText", { terminalId, text, enter: true });
+      return;
+    } catch (error) {
+      if (Date.now() > end) {
+        throw Object.assign(new Error(`terminal.sendText: ${(error as Error).message}`), { code: (error as { code?: string }).code ?? "action_failed" });
+      }
+      await new Promise((resolve) => setTimeout(resolve, TYPE_RETRY_MS));
+    }
   }
+}
+
+/** Starts an agent, waits for it, and types the pointer to the request; returns its terminal and row. */
+async function launchWith(host: HostCaller, workspaceId: string, agent: string, request: string): Promise<{ terminalId: string; row: AgentRow | null }> {
+  const { terminalId } = (await host.call("agent.launch", { workspaceId, agent }).catch((error: unknown) => {
+    throw Object.assign(new Error(`agent.launch: ${(error as Error).message}`), { code: (error as { code?: string }).code ?? "action_failed" });
+  })) as { terminalId: string };
+  const row = await waitForAgent(host, workspaceId, terminalId);
+  if (!row) throw Object.assign(new Error(`The ${agent} agent did not start in time; it is open in its terminal, so send again once it is ready.`), { code: "action_failed" });
+  await typeWhenAccepted(host, terminalId, pointerLine(request));
+  return { terminalId, row };
 }
 
 function coded(code: string, message: string): Error {
@@ -126,11 +169,10 @@ export async function send(host: HostCaller, input: SendInput, now = Date.now())
 }
 
 const TRACK_MS = 30 * 60_000;
-const SESSION_WAIT_MS = 20_000;
 
 /**
- * Starts an agent on a request about an existing design (Orca: the send sheet's Launch), and
- * records its session for that design once Orca lists it.
+ * Starts an agent on a request about an existing design (Orca: the send sheet's Start), and records
+ * its session for that design.
  */
 export async function launch(
   host: HostCaller,
@@ -138,19 +180,9 @@ export async function launch(
   now = Date.now(),
 ): Promise<{ terminalId: string; request: string }> {
   const request = await writeRequest(input.root, input.slug, input.kind, input.text, now);
-  const { terminalId } = (await host.call("agent.launch", { workspaceId: input.workspaceId, agent: input.agent, prompt: pointerLine(request) })) as { terminalId: string };
-  void (async () => {
-    const end = Date.now() + SESSION_WAIT_MS;
-    while (Date.now() < end) {
-      const row = (await listAgents(host, input.workspaceId)).find((candidate) => candidate.terminalId === terminalId);
-      const record = row && recordOf(row);
-      if (record) {
-        await store.rememberDesignAgent(input.root, input.slug, record);
-        return;
-      }
-      await new Promise((resolve) => setTimeout(resolve, RESUME_POLL_MS));
-    }
-  })().catch(() => {});
+  const { terminalId, row } = await launchWith(host, input.workspaceId, input.agent, request);
+  const record = row && recordOf(row);
+  if (record) await store.rememberDesignAgent(input.root, input.slug, record);
   return { terminalId, request };
 }
 
@@ -166,7 +198,7 @@ export async function start(
   await store.initCanvas(input.root);
   const request = await writeRequest(input.root, null, "new", input.text, now);
   const known = new Set(await store.listSlugs(input.root));
-  const { terminalId } = (await host.call("agent.launch", { workspaceId: input.workspaceId, agent: input.agent, prompt: pointerLine(request) })) as { terminalId: string };
+  const { terminalId } = await launchWith(host, input.workspaceId, input.agent, request);
   const stop = watchRoot(input.root, () => {
     void (async () => {
       const fresh = (await store.listSlugs(input.root)).filter((slug) => !known.has(slug));

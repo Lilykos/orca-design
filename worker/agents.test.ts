@@ -1,4 +1,4 @@
-import { assert, mockHost, mountWorker, test } from 'orca/testing'
+import { assert, hostError, mockHost, mountWorker, test } from 'orca/testing'
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { makeRoot, workspaces } from '../tests/helpers.ts'
@@ -84,13 +84,19 @@ test('dc.send resumes the recorded session when it is not running', async () => 
 
 test('dc.start launches an agent with a pointer to the brief', async () => {
   const root = makeRoot([])
-  const { host, worker } = await boot(root, { 'agents.list': listed([]), 'agent.launch': { terminalId: 'new-t' } })
+  let launched = false
+  const { host, worker } = await boot(root, {
+    'agents.list': () => listed(launched ? [row({ terminalId: 'new-t' })] : []),
+    'agent.launch': () => { launched = true; return { terminalId: 'new-t' } }
+  })
   const out = await worker.request('dc.start', { ws: 'w1', brief: 'A pricing page', kind: 'wireframe', agent: 'claude' })
   assert.equal(out.terminalId, 'new-t')
   const launch = (host.callsOf('agent.launch') as any[])[0]
   assert.equal(launch.agent, 'claude')
-  assert.match(launch.prompt, /^Read design\/\.requests\/\d{8}-\d{6}-new\.md and do what it asks\.$/)
-  const file = launch.prompt.slice(5, launch.prompt.indexOf(' and do'))
+  assert.equal(launch.prompt, undefined)
+  const typed = (host.callsOf('terminal.sendText') as any[])[0]
+  assert.match(typed.text, /^Read design\/\.requests\/\d{8}-\d{6}-new\.md and do what it asks\.$/)
+  const file = typed.text.slice(5, typed.text.indexOf(' and do'))
   assert.match(readFileSync(path.join(root, file), 'utf8'), /A pricing page/)
   await worker.deactivate()
 })
@@ -112,7 +118,13 @@ test('dc.launch starts an agent on a design request and records its session for 
   })
   const out = await worker.request('dc.launch', { ws: 'w1', slug: 'minimal', kind: 'comments', text: 'Fix it', agent: 'claude' })
   assert.equal(out.terminalId, 'L1')
-  assert.match((host.callsOf('agent.launch') as any[])[0].prompt, /^Read design\/minimal\/\.requests\/.+-comments\.md and do what it asks\.$/)
+  // Orca's own launch-prompt delivery races the agent's start-up, so the prompt is typed once
+  // the agent is listed, as dc.send does.
+  assert.equal((host.callsOf('agent.launch') as any[])[0].prompt, undefined)
+  const typed = host.callsOf('terminal.sendText') as any[]
+  assert.equal(typed.length, 1)
+  assert.match(typed[0].text, /^Read design\/minimal\/\.requests\/.+-comments\.md and do what it asks\.$/)
+  assert.equal(typed[0].terminalId, 'L1')
   const end = Date.now() + 3000
   let agents: Record<string, string> = {}
   while (Date.now() < end) {
@@ -121,5 +133,21 @@ test('dc.launch starts an agent on a design request and records its session for 
     await new Promise((r) => setTimeout(r, 50))
   }
   assert.equal(agents.minimal, 'claude:sess-L')
+  await worker.deactivate()
+})
+
+test('dc.launch retries typing while the new agent still refuses input', async () => {
+  const root = makeRoot(['minimal'])
+  let launched = false
+  let tries = 0
+  const { host, worker } = await boot(root, {
+    'agents.list': () => listed(launched ? [row({ terminalId: 'L2', sessionId: 's2' })] : []),
+    'agent.launch': () => { launched = true; return { terminalId: 'L2' } },
+    'terminal.sendText': () => { tries++; if (tries < 3) throw hostError('consent_required', 'plugin is not enabled with current consent'); return { accepted: true } }
+  })
+  const out = await worker.request('dc.launch', { ws: 'w1', slug: 'minimal', kind: 'comments', text: 'x', agent: 'claude' })
+  assert.equal(out.terminalId, 'L2')
+  assert.equal(tries, 3)
+  assert.equal(host.callsOf('agent.launch').length, 1)
   await worker.deactivate()
 })

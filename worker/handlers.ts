@@ -67,7 +67,9 @@ export function registerHandlers(orca: OrcaWorkerApi, deps: HandlerDeps = { now:
         const input = schema.parse(raw) as z.infer<S> & { ws: string };
         return await fn(input, await resolveRoot(host, input.ws));
       } catch (error) {
-        throw translate(error);
+        const failure = translate(error) as { code?: string; message?: string };
+        orca.log(`${name} failed: ${failure.code ?? "error"} ${failure.message ?? String(failure)}`);
+        throw failure;
       }
     }) as never);
   }

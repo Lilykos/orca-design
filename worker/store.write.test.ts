@@ -71,3 +71,18 @@ test('initCanvas gives the entry a random id', async () => {
   assert.equal(entry.version, 1)
   assert.match(entry.id, /^[a-f0-9]{16}$/)
 })
+
+test('initCanvas installs the agent CLI and guide under design/.canvas', async () => {
+  const root = makeRoot([])
+  await initCanvas(root)
+  assert.ok(existsSync(path.join(root, 'design/.canvas/dc.mjs')))
+  assert.match(readFileSync(path.join(root, 'design/.canvas/GUIDE.md'), 'utf8'), /dc\.mjs resolve/)
+})
+
+test('initCanvas leaves a Paseo README in place', async () => {
+  const root = makeRoot([])
+  const paseo = '# Designs\n\nThis folder holds designs shown on the Design canvas in Paseo. (old guide)\n'
+  writeFileSync(path.join(root, 'design/README.md'), paseo)
+  await initCanvas(root)
+  assert.equal(readFileSync(path.join(root, 'design/README.md'), 'utf8'), paseo)
+})
