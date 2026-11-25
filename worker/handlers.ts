@@ -19,7 +19,7 @@ import { designKindSchema } from "../shared/design";
 import { PathError } from "./paths";
 import * as store from "./store";
 import { summarizePaths, watchRoot } from "./watch";
-import { HostCodeError, listWorkspaceRows, resolveRoot, type HostCaller } from "./workspace";
+import { designHome, HostCodeError, listWorkspaceRows, resolveRoot, resolveWorkspace, type HostCaller } from "./workspace";
 
 const ws = z.object({ ws: z.string().min(1).max(500) });
 const design = ws.extend({ slug: slugSchema });
@@ -90,7 +90,7 @@ export function registerHandlers(orca: OrcaWorkerApi, deps: HandlerDeps = { now:
       const matches: string[] = [];
       await Promise.all(
         rows.map(async (row) => {
-          const entry = await store.readCanvasEntry(row.path);
+          const entry = await store.readCanvasEntry(designHome(row.path));
           if (entry === null) return;
           if (id ? entryId(entry) === id : entry === text) matches.push(row.id);
         }),
@@ -232,7 +232,7 @@ export function registerHandlers(orca: OrcaWorkerApi, deps: HandlerDeps = { now:
       terminalId: z.string().min(1).optional(),
     }),
     async ({ ws: workspaceId, slug, kind, text, terminalId }, root) =>
-      agents.send(host, { workspaceId, root, slug: slug ?? null, kind, text, terminalId }, deps.now()),
+      agents.send(host, { workspaceId, root, cwd: (await resolveWorkspace(host, workspaceId)).cwd, slug: slug ?? null, kind, text, terminalId }, deps.now()),
   );
 
   handle(
@@ -242,14 +242,15 @@ export function registerHandlers(orca: OrcaWorkerApi, deps: HandlerDeps = { now:
       text: z.string().min(1).max(200_000),
       agent: z.string().min(1).max(40),
     }),
-    async ({ ws: workspaceId, slug, kind, text, agent }, root) => agents.launch(host, { workspaceId, root, agent, slug, kind, text }, deps.now()),
+    async ({ ws: workspaceId, slug, kind, text, agent }, root) =>
+      agents.launch(host, { workspaceId, root, cwd: (await resolveWorkspace(host, workspaceId)).cwd, agent, slug, kind, text }, deps.now()),
   );
 
   handle(
     "dc.start",
     ws.extend({ brief: z.string().trim().min(1).max(20_000), kind: designKindSchema.optional(), agent: z.string().min(1).max(40) }),
     async ({ ws: workspaceId, brief, kind, agent }, root) =>
-      agents.start(host, { workspaceId, root, agent, text: newDesignPrompt(brief, kind) }, deps.now()),
+      agents.start(host, { workspaceId, root, cwd: (await resolveWorkspace(host, workspaceId)).cwd, agent, text: newDesignPrompt(brief, kind) }, deps.now()),
   );
 
   return () => {

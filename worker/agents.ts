@@ -3,7 +3,7 @@
 // keeps a record of what was asked.
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { DESIGN_DIR, REQUESTS_DIR } from "../shared/design";
+import { CLI_FILE, DESIGN_DIR, REQUESTS_DIR } from "../shared/design";
 import type { AgentRow, RequestKind } from "../shared/protocol";
 import * as store from "./store";
 import { watchRoot } from "./watch";
@@ -59,6 +59,50 @@ async function exists(file: string): Promise<boolean> {
 
 export function pointerLine(rel: string): string {
   return `Read ${rel} and do what it asks.`;
+}
+
+/**
+ * Where the agent runs differs from the folder holding design/ when Orca opened design/ itself as
+ * the workspace: then paths an agent is given are made relative to its own folder.
+ */
+export interface Place {
+  root: string;
+  cwd: string;
+}
+
+function forAgent(place: Place, relFromRoot: string): string {
+  if (place.cwd === place.root) return relFromRoot;
+  return path.relative(place.cwd, path.join(place.root, relFromRoot)).split(path.sep).join("/");
+}
+
+/** The request text with the CLI command made runnable from the agent's folder. */
+function localize(place: Place, text: string): string {
+  if (place.cwd === place.root) return text;
+  return text.split(`node ${DESIGN_DIR}/${CLI_FILE}`).join(`node ${forAgent(place, `${DESIGN_DIR}/${CLI_FILE}`)}`);
+}
+
+/** Writes the request (made runnable from the agent's folder) and returns the line that points at it. */
+async function prepare(place: Place, slug: string | null, kind: RequestKind, text: string, now: number): Promise<{ request: string; line: string }> {
+  const request = await writeRequest(place.root, slug, kind, localize(place, text), now);
+  return { request, line: pointerLine(forAgent(place, request)) };
+}
+
+const RECORD_WAIT_MS = 30_000;
+
+/** Records the agent's session for the design as soon as Orca reports one (it can lag the start). */
+function recordWhenKnown(host: HostCaller, workspaceId: string, root: string, slug: string, terminalId: string): void {
+  void (async () => {
+    const end = Date.now() + RECORD_WAIT_MS;
+    while (Date.now() < end) {
+      const row = (await listAgents(host, workspaceId)).find((candidate) => candidate.terminalId === terminalId);
+      const record = row && recordOf(row);
+      if (record) {
+        await store.rememberDesignAgent(root, slug, record);
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+    }
+  })().catch(() => {});
 }
 
 export async function listAgents(host: HostCaller, workspaceId: string): Promise<AgentRow[]> {
@@ -121,13 +165,13 @@ async function typeWhenAccepted(host: HostCaller, terminalId: string, text: stri
 }
 
 /** Starts an agent, waits for it, and types the pointer to the request; returns its terminal and row. */
-async function launchWith(host: HostCaller, workspaceId: string, agent: string, request: string): Promise<{ terminalId: string; row: AgentRow | null }> {
+async function launchWith(host: HostCaller, workspaceId: string, agent: string, line: string): Promise<{ terminalId: string; row: AgentRow | null }> {
   const { terminalId } = (await host.call("agent.launch", { workspaceId, agent }).catch((error: unknown) => {
     throw Object.assign(new Error(`agent.launch: ${(error as Error).message}`), { code: (error as { code?: string }).code ?? "action_failed" });
   })) as { terminalId: string };
   const row = await waitForAgent(host, workspaceId, terminalId);
   if (!row) throw Object.assign(new Error(`The ${agent} agent did not start in time; it is open in its terminal, so send again once it is ready.`), { code: "action_failed" });
-  await typeWhenAccepted(host, terminalId, pointerLine(request));
+  await typeWhenAccepted(host, terminalId, line);
   return { terminalId, row };
 }
 
@@ -138,6 +182,8 @@ function coded(code: string, message: string): Error {
 export interface SendInput {
   workspaceId: string;
   root: string;
+  /** The workspace's own folder, where its agents run; defaults to root. */
+  cwd?: string;
   /** null for a message about no design yet (a new brief). */
   slug: string | null;
   kind: RequestKind;
@@ -163,8 +209,8 @@ export async function send(host: HostCaller, input: SendInput, now = Date.now())
   }
   const chosen = rows.find((row) => row.terminalId === terminalId);
   if (input.slug && !recorded && chosen && recordOf(chosen)) await store.rememberDesignAgent(input.root, input.slug, recordOf(chosen)!);
-  const request = await writeRequest(input.root, input.slug, input.kind, input.text, now);
-  await host.call("terminal.sendText", { terminalId: terminalId!, text: pointerLine(request), enter: true });
+  const { request, line } = await prepare({ root: input.root, cwd: input.cwd ?? input.root }, input.slug, input.kind, input.text, now);
+  await host.call("terminal.sendText", { terminalId: terminalId!, text: line, enter: true });
   return { terminalId: terminalId!, request };
 }
 
@@ -176,13 +222,12 @@ const TRACK_MS = 30 * 60_000;
  */
 export async function launch(
   host: HostCaller,
-  input: { workspaceId: string; root: string; agent: string; slug: string; kind: RequestKind; text: string },
+  input: { workspaceId: string; root: string; cwd?: string; agent: string; slug: string; kind: RequestKind; text: string },
   now = Date.now(),
 ): Promise<{ terminalId: string; request: string }> {
-  const request = await writeRequest(input.root, input.slug, input.kind, input.text, now);
-  const { terminalId, row } = await launchWith(host, input.workspaceId, input.agent, request);
-  const record = row && recordOf(row);
-  if (record) await store.rememberDesignAgent(input.root, input.slug, record);
+  const { request, line } = await prepare({ root: input.root, cwd: input.cwd ?? input.root }, input.slug, input.kind, input.text, now);
+  const { terminalId } = await launchWith(host, input.workspaceId, input.agent, line);
+  recordWhenKnown(host, input.workspaceId, input.root, input.slug, terminalId);
   return { terminalId, request };
 }
 
@@ -192,13 +237,13 @@ export async function launch(
  */
 export async function start(
   host: HostCaller,
-  input: { workspaceId: string; root: string; agent: string; text: string },
+  input: { workspaceId: string; root: string; cwd?: string; agent: string; text: string },
   now = Date.now(),
 ): Promise<{ terminalId: string; request: string }> {
   await store.initCanvas(input.root);
-  const request = await writeRequest(input.root, null, "new", input.text, now);
+  const { request, line } = await prepare({ root: input.root, cwd: input.cwd ?? input.root }, null, "new", input.text, now);
   const known = new Set(await store.listSlugs(input.root));
-  const { terminalId } = await launchWith(host, input.workspaceId, input.agent, request);
+  const { terminalId } = await launchWith(host, input.workspaceId, input.agent, line);
   const stop = watchRoot(input.root, () => {
     void (async () => {
       const fresh = (await store.listSlugs(input.root)).filter((slug) => !known.has(slug));

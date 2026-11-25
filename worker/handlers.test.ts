@@ -167,3 +167,13 @@ test('dc.locate matches an entry without id by its text, and gives null when not
   assert.deepEqual(await worker.request('dc.locate', { text: '{"version":1,"id":"zzz"}' }), { ws: null })
   await worker.deactivate()
 })
+
+test('a workspace opened at design/ itself resolves to the folder above it', async () => {
+  const root = makeRoot(['minimal'])
+  writeFileSync(path.join(root, 'design/canvas.design.json'), '{"version":1,"id":"inner"}')
+  const worker = await bootMany({ wd: path.join(root, 'design') }, null)
+  assert.deepEqual(await worker.request('dc.locate', { text: '{"version":1,"id":"inner"}' }), { ws: 'wd' })
+  const list = await worker.request('dc.list', { ws: 'wd' })
+  assert.deepEqual(list.designs.map((d) => d.slug), ['minimal'])
+  await worker.deactivate()
+})

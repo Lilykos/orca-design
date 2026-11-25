@@ -151,3 +151,39 @@ test('dc.launch retries typing while the new agent still refuses input', async (
   assert.equal(host.callsOf('agent.launch').length, 1)
   await worker.deactivate()
 })
+
+test('dc.launch records the session once Orca reports it, after the launch returns', async () => {
+  const root = makeRoot(['minimal'])
+  let launched = false
+  let listings = 0
+  const { worker } = await boot(root, {
+    'agents.list': () => {
+      if (!launched) return listed([])
+      listings++
+      return listed([row({ terminalId: 'L3', sessionId: listings < 4 ? null as any : 'late-session' })])
+    },
+    'agent.launch': () => { launched = true; return { terminalId: 'L3' } }
+  })
+  await worker.request('dc.launch', { ws: 'w1', slug: 'minimal', kind: 'comments', text: 'x', agent: 'claude' })
+  const end = Date.now() + 8000
+  let agents: Record<string, string> = {}
+  while (Date.now() < end && !agents.minimal) {
+    try { agents = JSON.parse(readFileSync(path.join(root, 'design/canvas.design.json'), 'utf8')).agents ?? {} } catch {}
+    await new Promise((r) => setTimeout(r, 100))
+  }
+  assert.equal(agents.minimal, 'claude:late-session')
+  await worker.deactivate()
+})
+
+test('in a workspace opened at design/, the pointer and CLI are relative to design/', async () => {
+  const root = makeRoot(['minimal'])
+  writeFileSync(path.join(root, 'design/canvas.design.json'), '{"version":1,"id":"x"}')
+  resetWorkspaceCache()
+  const host = mockHost({ results: { ...workspaces({ wd: path.join(root, 'design') }), 'terminal.sendText': { accepted: true }, 'agents.list': listed([row({ terminalId: 'T' })]) } })
+  const worker = await mountWorker(main, { host })
+  const out = await worker.request('dc.send', { ws: 'wd', slug: 'minimal', kind: 'comments', text: 'Then run: node design/.canvas/dc.mjs resolve minimal 1 "<what you changed>"' })
+  const typed = (host.callsOf('terminal.sendText') as any[])[0].text
+  assert.match(typed, /^Read minimal\/\.requests\/.+-comments\.md and do what it asks\.$/)
+  assert.match(readFileSync(path.join(root, out.request), 'utf8'), /node \.canvas\/dc\.mjs resolve minimal 1/)
+  await worker.deactivate()
+})

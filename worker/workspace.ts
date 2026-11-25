@@ -1,4 +1,6 @@
 // Maps an Orca workspace id to its folder on this host, asked of Orca rather than trusted from a frame.
+import { existsSync } from "node:fs";
+import path from "node:path";
 
 export interface WorkspaceRow {
   id: string;
@@ -32,12 +34,31 @@ export async function listWorkspaceRows(host: HostCaller, fresh = false): Promis
   return answer.workspaces;
 }
 
-/** The workspace's folder; `invalid_params` when Orca does not know the id. */
-export async function resolveRoot(host: HostCaller, workspaceId: string): Promise<string> {
+/**
+ * The folder that holds design/ for a workspace folder. Orca opens a file's own folder as a
+ * workspace when no workspace holds it, so a workspace can be design/ itself: then it is the parent.
+ */
+export function designHome(workspacePath: string): string {
+  if (path.basename(workspacePath) === "design" && existsSync(path.join(workspacePath, "canvas.design.json"))) {
+    return path.dirname(workspacePath);
+  }
+  return workspacePath;
+}
+
+/**
+ * The folder holding the workspace's design/ (`root`) and the workspace's own folder, where its
+ * agents run (`cwd`); `invalid_params` when Orca does not know the id.
+ */
+export async function resolveWorkspace(host: HostCaller, workspaceId: string): Promise<{ root: string; cwd: string }> {
   let row = (await listWorkspaceRows(host)).find((candidate) => candidate.id === workspaceId);
   if (!row) row = (await listWorkspaceRows(host, true)).find((candidate) => candidate.id === workspaceId);
   if (!row) throw new HostCodeError("invalid_params", `Unknown workspace ${workspaceId}`);
-  return row.path;
+  return { root: designHome(row.path), cwd: row.path };
+}
+
+/** The folder holding the workspace's design/. */
+export async function resolveRoot(host: HostCaller, workspaceId: string): Promise<string> {
+  return (await resolveWorkspace(host, workspaceId)).root;
 }
 
 /** For tests: forget cached answers. */
