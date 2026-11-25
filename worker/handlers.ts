@@ -19,7 +19,7 @@ import { designKindSchema } from "../shared/design";
 import { PathError } from "./paths";
 import * as store from "./store";
 import { summarizePaths, watchRoot } from "./watch";
-import { HostCodeError, resolveRoot, type HostCaller } from "./workspace";
+import { HostCodeError, listWorkspaceRows, resolveRoot, type HostCaller } from "./workspace";
 
 const ws = z.object({ ws: z.string().min(1).max(500) });
 const design = ws.extend({ slug: slugSchema });
@@ -36,6 +36,15 @@ function translate(error: unknown): unknown {
   if (error instanceof HostCodeError) return coded(error.code, error.message);
   if (error instanceof z.ZodError) return coded("invalid_params", error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; "));
   return error;
+}
+
+function entryId(text: string): string | null {
+  try {
+    const parsed = JSON.parse(text) as { id?: unknown };
+    return typeof parsed.id === "string" ? parsed.id : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface HandlerDeps {
@@ -63,6 +72,35 @@ export function registerHandlers(orca: OrcaWorkerApi, deps: HandlerDeps = { now:
     }) as never);
   }
 
+  // Orca never tells an editor its file's path: the canvas entry names itself by its id (or, for
+  // one written by hand, its text), and worktrees of one repo that share it go to the focused one.
+  orca.panels.handle("dc.locate" as never, (async (raw: unknown) => {
+    try {
+      const { text } = z.object({ text: z.string().max(100_000) }).parse(raw);
+      let id: string | null = null;
+      try {
+        const parsed = JSON.parse(text) as { id?: unknown };
+        if (typeof parsed.id === "string" && parsed.id) id = parsed.id;
+      } catch {
+        // Not JSON: match by text.
+      }
+      const rows = await listWorkspaceRows(host, true);
+      const matches: string[] = [];
+      await Promise.all(
+        rows.map(async (row) => {
+          const entry = await store.readCanvasEntry(row.path);
+          if (entry === null) return;
+          if (id ? entryId(entry) === id : entry === text) matches.push(row.id);
+        }),
+      );
+      if (matches.length <= 1) return { ws: matches[0] ?? null };
+      const focused = ((await host.call("workspace.readContext", {})) as { workspaceId?: string } | null)?.workspaceId;
+      return { ws: matches.find((candidate) => candidate === focused) ?? matches.sort()[0]! };
+    } catch (error) {
+      throw translate(error);
+    }
+  }) as never);
+
   handle("dc.context", ws, async (_input, root) => ({ root, initialized: await store.isInitialized(root) }));
 
   handle("dc.init", ws, async (_input, root) => ({ created: await store.initCanvas(root) }));
@@ -75,6 +113,8 @@ export function registerHandlers(orca: OrcaWorkerApi, deps: HandlerDeps = { now:
   });
 
   handle("dc.design", design, async ({ slug }, root) => store.viewDesignMeta(root, slug));
+
+  handle("dc.version", design, async ({ slug }, root) => ({ version: await store.designVersion(root, slug) }));
 
   handle("dc.artboard", design.extend({ artboardId: slugSchema, offset }), async ({ slug, artboardId, offset: at }, root) => {
     const key = `${root}\0${slug}\0${artboardId}`;
@@ -183,13 +223,14 @@ export function registerHandlers(orca: OrcaWorkerApi, deps: HandlerDeps = { now:
 
   handle(
     "dc.send",
-    design.extend({
+    ws.extend({
+      slug: slugSchema.optional(),
       kind: z.enum(["comments", "tweaks", "apply-tweaks", "new"]),
       text: z.string().min(1).max(200_000),
       terminalId: z.string().min(1).optional(),
     }),
     async ({ ws: workspaceId, slug, kind, text, terminalId }, root) =>
-      agents.send(host, { workspaceId, root, slug, kind, text, terminalId }, deps.now()),
+      agents.send(host, { workspaceId, root, slug: slug ?? null, kind, text, terminalId }, deps.now()),
   );
 
   handle(

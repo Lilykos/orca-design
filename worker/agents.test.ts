@@ -94,3 +94,11 @@ test('dc.start launches an agent with a pointer to the brief', async () => {
   assert.match(readFileSync(path.join(root, file), 'utf8'), /A pricing page/)
   await worker.deactivate()
 })
+
+test('dc.send without a design writes under design/.requests', async () => {
+  const root = makeRoot([])
+  const { worker } = await boot(root, { 'agents.list': listed([row({ terminalId: 'term-1' })]) })
+  const out = await worker.request('dc.send', { ws: 'w1', kind: 'new', text: 'A brief' })
+  assert.match(out.request, /^design\/\.requests\/\d{8}-\d{6}-new\.md$/)
+  await worker.deactivate()
+})

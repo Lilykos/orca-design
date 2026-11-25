@@ -29,6 +29,8 @@ export interface ImportResult {
 
 declare module "orca" {
   interface PluginRequests {
+    /** Which workspace holds the canvas entry with this text (by its id, else exact text). */
+    "dc.locate": { input: { text: string }; output: { ws: string | null } };
     "dc.context": { input: WsInput; output: { root: string | null; initialized: boolean } };
     "dc.init": { input: WsInput; output: { created: boolean } };
     "dc.list": { input: WsInput; output: DesignList };
@@ -89,12 +91,19 @@ declare module "orca" {
   interface PluginRequests {
     "dc.agents": { input: WsInput & { slug?: string }; output: { rows: AgentRow[]; preferred: string | null } };
     "dc.send": {
-      input: DesignInput & { kind: RequestKind; text: string; terminalId?: string };
+      input: WsInput & { slug?: string; kind: RequestKind; text: string; terminalId?: string };
       output: { terminalId: string; request: string };
     };
     "dc.start": {
       input: WsInput & { brief: string; kind?: string; agent: string };
       output: { terminalId: string; request: string };
     };
+  }
+}
+
+declare module "orca" {
+  interface PluginRequests {
+    /** Cheap: a hash of the design's files' sizes and times, equal to DesignView.version. */
+    "dc.version": { input: DesignInput; output: { version: string } };
   }
 }

@@ -95,7 +95,8 @@ function coded(code: string, message: string): Error {
 export interface SendInput {
   workspaceId: string;
   root: string;
-  slug: string;
+  /** null for a message about no design yet (a new brief). */
+  slug: string | null;
   kind: RequestKind;
   text: string;
   terminalId?: string;
@@ -104,7 +105,7 @@ export interface SendInput {
 /** Writes the request and types its pointer into the chosen, recorded, resumed or only agent. */
 export async function send(host: HostCaller, input: SendInput, now = Date.now()): Promise<{ terminalId: string; request: string }> {
   const rows = await listAgents(host, input.workspaceId);
-  const recorded = (await store.readDesignAgents(input.root))[input.slug] ?? null;
+  const recorded = input.slug ? ((await store.readDesignAgents(input.root))[input.slug] ?? null) : null;
   let terminalId = input.terminalId ?? null;
   if (terminalId && !rows.some((row) => row.terminalId === terminalId && row.agent)) {
     throw coded("invalid_params", "choose-agent: that terminal is not running an agent");
@@ -118,7 +119,7 @@ export async function send(host: HostCaller, input: SendInput, now = Date.now())
     else throw coded("invalid_params", target.kind === "none" ? "no-agent: no agent is running in this workspace" : "choose-agent: several agents are running");
   }
   const chosen = rows.find((row) => row.terminalId === terminalId);
-  if (!recorded && chosen && recordOf(chosen)) await store.rememberDesignAgent(input.root, input.slug, recordOf(chosen)!);
+  if (input.slug && !recorded && chosen && recordOf(chosen)) await store.rememberDesignAgent(input.root, input.slug, recordOf(chosen)!);
   const request = await writeRequest(input.root, input.slug, input.kind, input.text, now);
   await host.call("terminal.sendText", { terminalId: terminalId!, text: pointerLine(request), enter: true });
   return { terminalId: terminalId!, request };

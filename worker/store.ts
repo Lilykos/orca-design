@@ -105,8 +105,17 @@ export async function initCanvas(root: string): Promise<boolean> {
     return false;
   } catch (error) {
     if (!isMissing(error)) throw error;
-    await writeFileAtomic(marker, `${JSON.stringify({ version: 1 }, null, 2)}\n`);
+    await writeFileAtomic(marker, `${JSON.stringify({ version: 1, id: randomBytes(8).toString("hex") }, null, 2)}\n`);
     return true;
+  }
+}
+
+/** The canvas entry's text, or null when the workspace has none. */
+export async function readCanvasEntry(root: string): Promise<string | null> {
+  try {
+    return await readFile(path.join(designRoot(root), CANVAS_ENTRY), "utf8");
+  } catch {
+    return null;
   }
 }
 

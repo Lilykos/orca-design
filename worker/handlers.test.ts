@@ -12,7 +12,9 @@ async function boot(root: string) {
   return mountWorker(main, { host: mockHost({ results: workspaces({ w1: root }) }) })
 }
 
-const until = async (check: () => boolean, ms = 3000) => {
+const isCatchUp = (post: { payload?: unknown }) => JSON.stringify(post.payload) === JSON.stringify({ ws: 'w1', slugs: [], list: true })
+
+const until = async (check: () => boolean, ms = 10_000) => {
   const end = Date.now() + ms
   while (!check() && Date.now() < end) await new Promise((r) => setTimeout(r, 25))
 }
@@ -86,18 +88,75 @@ test('bad input is invalid_params', async () => {
   await worker.deactivate()
 })
 
+test('watch posts a catch-up change once armed, for writes made while FSEvents starts', async () => {
+  const worker = await boot(makeRoot(['minimal']))
+  await worker.request('dc.watch', { ws: 'w1' })
+  await until(() => worker.posts.some(isCatchUp), 2000)
+  assert.ok(worker.posts.some(isCatchUp))
+  await worker.deactivate()
+})
+
 test('watch posts once per burst, naming the design', async () => {
   const root = makeRoot(['minimal'])
   const worker = await boot(root)
   await worker.request('dc.watch', { ws: 'w1' })
+  await until(() => worker.posts.some(isCatchUp), 2000)
+  await new Promise((r) => setTimeout(r, 200))
+  const armed = worker.posts.length
   const page = path.join(root, 'design/minimal/a.html')
   for (let i = 0; i < 3; i++) writeFileSync(page, `<p data-dc-id="p">v${i}</p>`)
   writeFileSync(path.join(root, 'design/minimal/.!123!a.html'), 'temp')
-  await until(() => worker.posts.length > 0)
+  await until(() => worker.posts.length > armed)
   await new Promise((r) => setTimeout(r, 400))
-  const changes = worker.posts.filter((p) => p.event === 'dc.changed')
+  const changes = worker.posts.slice(armed).filter((p) => p.event === 'dc.changed')
   assert.equal(changes.length, 1)
   assert.deepEqual(changes[0]!.payload, { ws: 'w1', slugs: ['minimal'], list: false })
   await worker.deactivate()
 })
 
+test('dc.version changes when a page changes, without inlining', async () => {
+  const root = makeRoot(['minimal'])
+  const worker = await boot(root)
+  const before = await worker.request('dc.version', { ws: 'w1', slug: 'minimal' })
+  await new Promise((r) => setTimeout(r, 20))
+  writeFileSync(path.join(root, 'design/minimal/a.html'), '<p data-dc-id="p">changed, longer</p>')
+  const after = await worker.request('dc.version', { ws: 'w1', slug: 'minimal' })
+  assert.notEqual(after.version, before.version)
+  await worker.deactivate()
+})
+
+async function bootMany(map: Record<string, string>, focused: string | null) {
+  resetWorkspaceCache()
+  const host = mockHost({
+    results: { ...workspaces(map), 'workspace.readContext': focused ? { workspaceId: focused, branch: 'main', displayName: 'x', terminals: [] } : null }
+  })
+  return mountWorker(main, { host })
+}
+
+test('dc.locate finds the workspace whose canvas entry has the document id', async () => {
+  const a = makeRoot([])
+  const b = makeRoot([])
+  writeFileSync(path.join(a, 'design/canvas.design.json'), '{"version":1,"id":"aaa"}')
+  writeFileSync(path.join(b, 'design/canvas.design.json'), '{"version":1,"id":"bbb"}')
+  const worker = await bootMany({ wa: a, wb: b }, 'wa')
+  assert.deepEqual(await worker.request('dc.locate', { text: '{"version":1,"id":"bbb"}' }), { ws: 'wb' })
+  await worker.deactivate()
+})
+
+test('dc.locate prefers the focused workspace when worktrees share the entry', async () => {
+  const a = makeRoot([])
+  const b = makeRoot([])
+  for (const r of [a, b]) writeFileSync(path.join(r, 'design/canvas.design.json'), '{"version":1,"id":"same"}')
+  const worker = await bootMany({ wa: a, wb: b }, 'wb')
+  assert.deepEqual(await worker.request('dc.locate', { text: '{"version":1,"id":"same"}' }), { ws: 'wb' })
+  await worker.deactivate()
+})
+
+test('dc.locate matches an entry without id by its text, and gives null when nothing matches', async () => {
+  const a = makeRoot([])
+  writeFileSync(path.join(a, 'design/canvas.design.json'), '{ "version": 1 }\n')
+  const worker = await bootMany({ wa: a }, null)
+  assert.deepEqual(await worker.request('dc.locate', { text: '{ "version": 1 }\n' }), { ws: 'wa' })
+  assert.deepEqual(await worker.request('dc.locate', { text: '{"version":1,"id":"zzz"}' }), { ws: null })
+  await worker.deactivate()
+})

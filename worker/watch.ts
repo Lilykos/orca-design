@@ -6,6 +6,12 @@ import path from "node:path";
 import { DESIGN_DIR } from "../shared/design";
 
 export const DEBOUNCE_MS = 150;
+/**
+ * On macOS, libuv starts the FSEvents stream asynchronously after fs.watch() returns, so writes in
+ * the first moments can be missed (seen 20–40% of the time under load). Once armed, one catch-up
+ * change is reported after this delay so readers re-check everything.
+ */
+export const ARM_SETTLE_MS = 500;
 
 type Listener = (paths: string[]) => void;
 
@@ -39,8 +45,19 @@ function open(root: string, emit: (paths: string[]) => void): () => void {
     if (timer) clearTimeout(timer);
     timer = setTimeout(flush, DEBOUNCE_MS);
   };
+  let settle: ReturnType<typeof setTimeout> | null = null;
+  const catchUp = () => {
+    if (settle) clearTimeout(settle);
+    settle = setTimeout(() => {
+      settle = null;
+      pending.add("");
+      if (timer) clearTimeout(timer);
+      flush();
+    }, ARM_SETTLE_MS);
+  };
   const watchDesign = () => {
     designWatcher = watch(design, { recursive: true }, (_event, name) => note(String(name ?? "")));
+    catchUp();
     designWatcher.on("error", () => {
       designWatcher?.close();
       designWatcher = null;
@@ -54,15 +71,13 @@ function open(root: string, emit: (paths: string[]) => void): () => void {
       rootWatcher?.close();
       rootWatcher = null;
       watchDesign();
-      pending.add("");
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(flush, DEBOUNCE_MS);
     });
   };
   if (existsSync(design)) watchDesign();
   else watchRoot();
   return () => {
     if (timer) clearTimeout(timer);
+    if (settle) clearTimeout(settle);
     designWatcher?.close();
     rootWatcher?.close();
   };

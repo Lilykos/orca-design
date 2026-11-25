@@ -4,17 +4,47 @@
   "name": "Design canvas",
   "version": "0.1.0",
   "description": "Where people and agents design together: HTML artboards on a canvas, with comments, edits and tweaks the agent revises.",
-  "engines": { "orca": ">=1.4.259" },
+  "engines": {
+    "orca": ">=1.4.259"
+  },
   "execution": "trusted-worker",
   "pluginApi": 1,
   "main": "worker/index.ts",
   "capabilities": [
-    { "kind": "workspace:read" },
-    { "kind": "workspace:write" },
-    { "kind": "agent:read" },
-    { "kind": "agent:launch" },
-    { "kind": "terminal:send" },
-    { "kind": "storage:own" },
-    { "kind": "notifications:show" }
-  ]
+    {
+      "kind": "workspace:read"
+    },
+    {
+      "kind": "workspace:write"
+    },
+    {
+      "kind": "agent:read"
+    },
+    {
+      "kind": "agent:launch"
+    },
+    {
+      "kind": "terminal:send"
+    },
+    {
+      "kind": "storage:own"
+    },
+    {
+      "kind": "notifications:show"
+    }
+  ],
+  "contributes": {
+    "customEditors": [
+      {
+        "id": "canvas",
+        "title": "Design canvas",
+        "extensions": [
+          ".design.json"
+        ],
+        "entry": "editor/main.ts",
+        "frame": "isolated",
+        "priority": "default"
+      }
+    ]
+  }
 }

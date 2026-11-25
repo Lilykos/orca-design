@@ -50,7 +50,7 @@ test('initCanvas writes the Orca entry, is idempotent, and keeps a hand-written 
   writeFileSync(path.join(root, 'design/README.md'), '# My notes\n')
   assert.equal(await initCanvas(root), true)
   assert.equal(await initCanvas(root), false)
-  assert.deepEqual(JSON.parse(readFileSync(path.join(root, 'design/canvas.design.json'), 'utf8')), { version: 1 })
+  assert.equal(JSON.parse(readFileSync(path.join(root, 'design/canvas.design.json'), 'utf8')).version, 1)
   assert.equal(readFileSync(path.join(root, 'design/README.md'), 'utf8'), '# My notes\n')
   assert.equal(existsSync(path.join(root, 'design/canvas.json')), false)
 })
@@ -62,4 +62,12 @@ test('rememberDesignAgent writes canvas.design.json and leaves canvas.json alone
   assert.deepEqual(JSON.parse(readFileSync(path.join(root, 'design/canvas.design.json'), 'utf8')).agents, { minimal: 'session-1' })
   assert.equal(readFileSync(path.join(root, 'design/canvas.json'), 'utf8'), '{"version":1}')
   assert.ok(readdirSync(path.join(root, 'design')).includes('canvas.design.json'))
+})
+
+test('initCanvas gives the entry a random id', async () => {
+  const root = makeRoot([])
+  await initCanvas(root)
+  const entry = JSON.parse(readFileSync(path.join(root, 'design/canvas.design.json'), 'utf8'))
+  assert.equal(entry.version, 1)
+  assert.match(entry.id, /^[a-f0-9]{16}$/)
 })
