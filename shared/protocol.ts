@@ -111,3 +111,29 @@ declare module "orca" {
     "dc.version": { input: DesignInput; output: { version: string } };
   }
 }
+
+export interface HomeDesign {
+  ws: string;
+  workspaceName: string;
+  project: string | null;
+  slug: string;
+  title: string;
+  kind: string | null;
+  artboards: number;
+  openComments: number;
+  updatedAt: number;
+}
+export interface HomeWorkspace {
+  ws: string;
+  name: string;
+  project: string | null;
+}
+
+declare module "orca" {
+  interface PluginRequests {
+    "dc.home": { input: Record<string, never>; output: { designs: HomeDesign[]; workspaces: HomeWorkspace[] } };
+    "dc.cover": { input: DesignInput & { offset: number }; output: ChunkOut & { width: number; height: number | null; error: string | null } };
+    "dc.open": { input: DesignInput; output: Record<string, never> };
+    "dc.openCanvas": { input: WsInput; output: Record<string, never> };
+  }
+}

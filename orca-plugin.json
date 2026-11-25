@@ -78,6 +78,15 @@
       {
         "on": "workspace.changed"
       }
+    ],
+    "panels": [
+      {
+        "id": "home",
+        "title": "Design",
+        "icon": "layers",
+        "entry": "panel/home.ts",
+        "ui": "html"
+      }
     ]
   }
 }

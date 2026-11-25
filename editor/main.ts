@@ -117,10 +117,32 @@ async function boot(): Promise<void> {
       // Storage unavailable: the command still opened the canvas.
     }
   };
+  // The home panel names a design to show (open:<ws>), or the designs that existed before it
+  // started a new one (expectNew:<ws>), so the canvas can jump to the new one when it appears.
+  const openKey = `open:${ws}`;
+  const expectKey = `expectNew:${ws}`;
+  const takeHandoff = async () => {
+    try {
+      const slug = await orca.storage.get(openKey);
+      if (typeof slug === "string" && slug) {
+        await orca.storage.delete(openKey);
+        handle.select(slug);
+      }
+      const known = await orca.storage.get(expectKey);
+      if (Array.isArray(known)) {
+        await orca.storage.delete(expectKey);
+        handle.expectNew(known.filter((item): item is string => typeof item === "string"));
+      }
+    } catch {
+      // Storage unavailable: the canvas shows its last design.
+    }
+  };
   orca.storage.onDidChange(({ key }) => {
     if (key === pendingKey) void takePending();
+    if (key === openKey || key === expectKey) void takeHandoff();
   });
   void takePending();
+  void takeHandoff();
   orca.plugin.on("dc.changed", (change) => {
     if (change.ws === ws) handle.refresh(change.slugs, change.list);
   });

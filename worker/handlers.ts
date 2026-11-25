@@ -13,6 +13,7 @@ import {
 import { tweakValueSchema } from "../shared/tweaks";
 import type { ArtboardView } from "../shared/views";
 import * as agents from "./agents";
+import { registerHome } from "./home";
 import { sliceChunk, UploadBuffer } from "./chunks";
 import { newDesignPrompt } from "../shared/prompts";
 import { designKindSchema } from "../shared/design";
@@ -252,6 +253,8 @@ export function registerHandlers(orca: OrcaWorkerApi, deps: HandlerDeps = { now:
     async ({ ws: workspaceId, brief, kind, agent }, root) =>
       agents.start(host, { workspaceId, root, cwd: (await resolveWorkspace(host, workspaceId)).cwd, agent, text: newDesignPrompt(brief, kind) }, deps.now()),
   );
+
+  registerHome(orca, handle as never);
 
   return () => {
     for (const stop of unwatch.values()) stop();
