@@ -187,3 +187,19 @@ test('in a workspace opened at design/, the pointer and CLI are relative to desi
   assert.match(readFileSync(path.join(root, out.request), 'utf8'), /node \.canvas\/dc\.mjs resolve minimal 1/)
   await worker.deactivate()
 })
+
+test('a resumed session gets its pointer only once it accepts input', async () => {
+  const root = makeRoot(['minimal'])
+  writeFileSync(path.join(root, 'design/canvas.design.json'), JSON.stringify({ version: 1, agents: { minimal: 'claude:s-old' } }))
+  let resumed = false
+  let tries = 0
+  const { worker } = await boot(root, {
+    'agents.list': () => listed(resumed ? [row({ terminalId: 'R', sessionId: 's-old' })] : []),
+    'agent.resume': () => { resumed = true; return { terminalId: 'R', started: true } },
+    'terminal.sendText': () => { tries++; if (tries < 2) throw hostError('consent_required', 'not yet'); return { accepted: true } }
+  })
+  const out = await worker.request('dc.send', { ws: 'w1', slug: 'minimal', kind: 'comments', text: 'x' })
+  assert.equal(out.terminalId, 'R')
+  assert.equal(tries, 2)
+  await worker.deactivate()
+})

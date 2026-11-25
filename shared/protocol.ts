@@ -30,7 +30,7 @@ export interface ImportResult {
 declare module "orca" {
   interface PluginRequests {
     /** Which workspace holds the canvas entry with this text (by its id, else exact text). */
-    "dc.locate": { input: { text: string }; output: { ws: string | null } };
+    "dc.locate": { input: { text: string }; output: { ws: string | null; candidates?: string[] } };
     "dc.context": { input: WsInput; output: { root: string | null; initialized: boolean } };
     "dc.init": { input: WsInput; output: { created: boolean } };
     "dc.list": { input: WsInput; output: DesignList };
@@ -132,7 +132,7 @@ export interface HomeWorkspace {
 declare module "orca" {
   interface PluginRequests {
     "dc.home": { input: Record<string, never>; output: { designs: HomeDesign[]; workspaces: HomeWorkspace[] } };
-    "dc.cover": { input: DesignInput & { offset: number }; output: ChunkOut & { width: number; height: number | null; error: string | null } };
+    "dc.cover": { input: DesignInput & { offset: number }; output: ChunkOut & { width: number; height: number | null; error: string | null; version: string } };
     "dc.open": { input: DesignInput; output: Record<string, never> };
     "dc.openCanvas": { input: WsInput; output: Record<string, never> };
   }

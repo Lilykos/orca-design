@@ -1,5 +1,5 @@
 import { assert, test } from 'orca/testing'
-import { sheetModel } from './send-sheet.ts'
+import { RESUME, sheetModel, sheetState } from './send-sheet.ts'
 import type { AgentRow } from '../shared/protocol.ts'
 
 const row = (terminalId: string, sessionId: string, title = 'Claude'): AgentRow => ({ terminalId, title, agent: 'claude', state: 'waiting', sessionId })
@@ -26,4 +26,18 @@ test('with several agents and no record, nothing is preselected', () => {
 
 test('a lone agent is preselected', () => {
   assert.equal(sheetModel([row('a', 's1')], null).selected, 'a')
+})
+
+test('a recorded agent that is not running is offered for resume', () => {
+  const m = sheetModel([row('a', 'other')], 'codex:s-gone')
+  assert.equal(m.resume, 'codex')
+  assert.equal(m.selected, RESUME)
+  assert.equal(m.canSend, true)
+})
+
+test('the sheet cannot be cancelled while its action runs', () => {
+  const state = sheetState()
+  assert.equal(state.requestClose(), true)
+  state.busy = true
+  assert.equal(state.requestClose(), false)
 })

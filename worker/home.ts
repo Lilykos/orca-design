@@ -3,6 +3,7 @@ import type { OrcaWorkerApi } from "orca/worker";
 import { z } from "../vendor/zod.js";
 import { slugSchema } from "../shared/design";
 import type { HomeDesign, HomeWorkspace } from "../shared/protocol";
+import type { ArtboardView } from "../shared/views";
 import { sliceChunk } from "./chunks";
 import { openCanvas } from "./commands";
 import * as store from "./store";
@@ -47,11 +48,23 @@ export function registerHome(orca: OrcaWorkerApi, handle: (name: string, schema:
 
   orca.panels.handle("dc.home" as never, (async () => listHome(host)) as never);
 
+  // Rendered once per load (offset 0) and reused for its later chunks, like dc.artboard.
+  const covers = new Map<string, { view: ArtboardView; at: number }>();
   handle("dc.cover", z.object({ ws: z.string(), slug: slugSchema, offset: z.number().int().min(0) }), async ({ slug, offset }, root) => {
-    const view = await store.coverView(root, slug);
-    if (!view) return { chunk: "", offset: 0, total: 0, done: true, width: 0, height: null, error: "No artboards" };
+    const key = `${root}\0${slug}`;
+    const now = Date.now();
+    for (const [k, entry] of covers) if (now - entry.at > 60_000) covers.delete(k);
+    let cached = covers.get(key);
+    if (offset === 0 || !cached) {
+      const view = await store.coverView(root, slug);
+      if (!view) return { chunk: "", offset: 0, total: 0, done: true, width: 0, height: null, error: "No artboards", version: "none" };
+      cached = { view, at: now };
+      covers.set(key, cached);
+    }
+    const { view } = cached;
     const part = sliceChunk(view.html ?? "", offset);
-    return { ...part, width: view.width, height: view.height ?? null, error: view.error };
+    if (part.done) covers.delete(key);
+    return { ...part, width: view.width, height: view.height ?? null, error: view.error, version: view.version };
   });
 
   // Fix #3: one request does the whole hop, so opening a design can't stop halfway.

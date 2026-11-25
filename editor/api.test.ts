@@ -58,3 +58,18 @@ test('startDesign hands the sheet the brief, with no design slug', async () => {
   assert.equal(asked[0].brief, 'A pricing page')
   assert.match(asked[0].text, /A pricing page/)
 })
+
+test('a page that changes mid-load is fetched again, never mixed', async () => {
+  let loads = 0
+  const request: Requester = async (name, input: any) => {
+    if (name === 'dc.design') return meta
+    if (input.offset === 0) loads++
+    // First load: chunk 0 is v1, chunk 1 is v2 (the agent wrote in between). Second load: all v2.
+    const version = loads === 1 && input.offset === 0 ? 'v1' : 'v2'
+    const text = `${version}-${input.offset === 0 ? 'a' : 'b'}`
+    return { chunk: text, offset: input.offset + 1, total: 2, done: input.offset === 1, version, source: version, error: null }
+  }
+  const view = await createApi('w1', request).getDesign('x')
+  assert.equal(view.artboards[0]!.html, 'v2-av2-b')
+  assert.equal(view.artboards[0]!.version, 'v2')
+})

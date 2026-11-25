@@ -38,14 +38,31 @@ export interface ApiHooks {
 
 const PARALLEL_PAGES = 3;
 
-async function readChunks<T extends { chunk: string; offset: number; done: boolean }>(fetch: (offset: number) => Promise<T>): Promise<{ text: string; last: T }> {
-  let offset = 0;
-  const parts: string[] = [];
-  for (;;) {
-    const part = await fetch(offset);
-    parts.push(part.chunk);
-    if (part.done) return { text: parts.join(""), last: part };
-    offset = part.offset;
+/**
+ * Reads a chunked answer. When the pieces carry a `version` and it changes mid-read (the file was
+ * written meanwhile, or another load re-rendered it), the read starts over, so pieces of two
+ * versions are never joined.
+ */
+export async function readChunks<T extends { chunk: string; offset: number; done: boolean; version?: string }>(
+  fetch: (offset: number) => Promise<T>,
+  attempts = 4,
+): Promise<{ text: string; last: T }> {
+  for (let attempt = 1; ; attempt++) {
+    let offset = 0;
+    const parts: string[] = [];
+    let first: string | undefined;
+    let mixed = false;
+    for (;;) {
+      const part = await fetch(offset);
+      if (offset === 0) first = part.version;
+      else if (part.version !== first) mixed = true;
+      parts.push(part.chunk);
+      if (part.done || mixed) {
+        if (!mixed || attempt >= attempts) return { text: parts.join(""), last: part };
+        break;
+      }
+      offset = part.offset;
+    }
   }
 }
 

@@ -3,7 +3,7 @@
 import "../shared/protocol";
 import type { AgentRow } from "../shared/protocol";
 import { createApi, type SendRequest } from "./api";
-import { openSendSheet } from "./send-sheet";
+import { openSendSheet, RESUME } from "./send-sheet";
 import { type AgentStatus, mountCanvas } from "./canvas";
 import { pickZip } from "./files";
 import { t } from "./i18n";
@@ -58,7 +58,17 @@ async function boot(): Promise<void> {
   const doc = await orca.document?.get();
   const text = doc?.content.kind === "text" ? doc.content.text : "";
   let ws: string | undefined;
-  if (text) ws = ((await request("dc.locate", { text })) as { ws: string | null }).ws ?? undefined;
+  if (text) {
+    const located = (await request("dc.locate", { text })) as { ws: string | null; candidates?: string[] };
+    if (!located.ws && located.candidates?.length) {
+      notice(
+        `This canvas file is in ${located.candidates.length} worktrees and none of them is focused. ` +
+          "Focus the worktree you want in the sidebar, then reopen this tab.",
+      );
+      return;
+    }
+    ws = located.ws ?? undefined;
+  }
   if (!ws) ws = ((await orca.host.call("workspace.readContext", {})) as { workspaceId?: string } | null)?.workspaceId;
   if (!ws) {
     notice("Open this file from a workspace to see its designs.");
@@ -79,7 +89,9 @@ async function boot(): Promise<void> {
         rows,
         preferred,
         async onSend(terminalId) {
-          await request("dc.send", { ws, ...(req.slug ? { slug: req.slug } : {}), kind: req.kind, text: req.text, terminalId });
+          // RESUME: no terminal, so the worker resumes the design's recorded session first.
+          const target = terminalId === RESUME ? {} : { terminalId };
+          await request("dc.send", { ws, ...(req.slug ? { slug: req.slug } : {}), kind: req.kind, text: req.text, ...target });
         },
         async onLaunch(agent) {
           if (req.slug) await request("dc.launch", { ws, slug: req.slug, kind: req.kind, text: req.text, agent });

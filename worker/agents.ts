@@ -138,7 +138,10 @@ async function waitForAgent(host: HostCaller, workspaceId: string, terminalId: s
 /** Resumes a recorded session and waits until Orca lists it, idle, in that terminal. */
 async function resume(host: HostCaller, workspaceId: string, recorded: { agent: string; sessionId: string }): Promise<string> {
   const { terminalId } = (await host.call("agent.resume", { workspaceId, ...recorded })) as { terminalId: string };
-  await waitForAgent(host, workspaceId, terminalId);
+  // Never type into the terminal unless Orca lists an agent there (plan focus item 5).
+  if (!(await waitForAgent(host, workspaceId, terminalId))) {
+    throw Object.assign(new Error(`The ${recorded.agent} session did not resume in time; it is open in its terminal, so send again once it is ready.`), { code: "action_failed" });
+  }
   return terminalId;
 }
 
@@ -196,6 +199,7 @@ export async function send(host: HostCaller, input: SendInput, now = Date.now())
   const rows = await listAgents(host, input.workspaceId);
   const recorded = input.slug ? ((await store.readDesignAgents(input.root))[input.slug] ?? null) : null;
   let terminalId = input.terminalId ?? null;
+  let resumed = false;
   if (terminalId && !rows.some((row) => row.terminalId === terminalId && row.agent)) {
     throw coded("invalid_params", "choose-agent: that terminal is not running an agent");
   }
@@ -203,14 +207,19 @@ export async function send(host: HostCaller, input: SendInput, now = Date.now())
     const target = pickTarget(rows, recorded);
     const wanted = parseRecorded(recorded);
     if (target.kind === "one" && (!wanted || target.row.sessionId === wanted.sessionId)) terminalId = target.row.terminalId;
-    else if (wanted) terminalId = await resume(host, input.workspaceId, wanted);
+    else if (wanted) {
+      terminalId = await resume(host, input.workspaceId, wanted);
+      resumed = true;
+    }
     else if (target.kind === "one") terminalId = target.row.terminalId;
     else throw coded("invalid_params", target.kind === "none" ? "no-agent: no agent is running in this workspace" : "choose-agent: several agents are running");
   }
   const chosen = rows.find((row) => row.terminalId === terminalId);
   if (input.slug && !recorded && chosen && recordOf(chosen)) await store.rememberDesignAgent(input.root, input.slug, recordOf(chosen)!);
   const { request, line } = await prepare({ root: input.root, cwd: input.cwd ?? input.root }, input.slug, input.kind, input.text, now);
-  await host.call("terminal.sendText", { terminalId: terminalId!, text: line, enter: true });
+  // A just-resumed agent refuses input for a moment, like a launched one.
+  if (resumed) await typeWhenAccepted(host, terminalId!, line);
+  else await host.call("terminal.sendText", { terminalId: terminalId!, text: line, enter: true });
   return { terminalId: terminalId!, request };
 }
 

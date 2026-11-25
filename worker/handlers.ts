@@ -97,8 +97,10 @@ export function registerHandlers(orca: OrcaWorkerApi, deps: HandlerDeps = { now:
         }),
       );
       if (matches.length <= 1) return { ws: matches[0] ?? null };
+      // Worktrees of one repo share the committed entry: only the focused one is a safe guess.
       const focused = ((await host.call("workspace.readContext", {})) as { workspaceId?: string } | null)?.workspaceId;
-      return { ws: matches.find((candidate) => candidate === focused) ?? matches.sort()[0]! };
+      const chosen = matches.find((candidate) => candidate === focused);
+      return chosen ? { ws: chosen } : { ws: null, candidates: matches.sort() };
     } catch (error) {
       throw translate(error);
     }

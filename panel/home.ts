@@ -4,6 +4,7 @@ import "../shared/protocol";
 import type { HomeDesign, HomeWorkspace } from "../shared/protocol";
 import { CHUNK } from "../shared/protocol";
 import { buildSrcdoc } from "../editor/runtime";
+import { readChunks } from "../editor/api";
 
 const request = (name: string, input: unknown) => orca.plugin.request(name as never, input as never) as Promise<any>;
 
@@ -49,17 +50,6 @@ function ago(ms: number): string {
   if (s < 3600) return `${Math.round(s / 60)} min ago`;
   if (s < 86_400) return `${Math.round(s / 3600)} h ago`;
   return `${Math.round(s / 86_400)} d ago`;
-}
-
-async function readChunks(fetch: (offset: number) => Promise<any>): Promise<{ text: string; last: any }> {
-  let offset = 0;
-  const parts: string[] = [];
-  for (;;) {
-    const part = await fetch(offset);
-    parts.push(part.chunk);
-    if (part.done) return { text: parts.join(""), last: part };
-    offset = part.offset;
-  }
 }
 
 function fileToBase64(file: Blob): Promise<string> {

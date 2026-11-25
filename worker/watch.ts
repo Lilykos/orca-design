@@ -55,27 +55,48 @@ function open(root: string, emit: (paths: string[]) => void): () => void {
       flush();
     }, ARM_SETTLE_MS);
   };
+  // Every fs.watch call and error is contained: a workspace folder can disappear (a deleted
+  // worktree), and an exception thrown from a watcher callback would take the whole worker down.
+  let closed = false;
   const watchDesign = () => {
-    designWatcher = watch(design, { recursive: true }, (_event, name) => note(String(name ?? "")));
+    try {
+      designWatcher = watch(design, { recursive: true }, (_event, name) => note(String(name ?? "")));
+    } catch {
+      designWatcher = null;
+      watchRoot();
+      return;
+    }
     catchUp();
     designWatcher.on("error", () => {
       designWatcher?.close();
       designWatcher = null;
-      watchRoot();
+      if (!closed) watchRoot();
     });
   };
   // Until design/ exists, watch the workspace root for it to appear.
   const watchRoot = () => {
-    rootWatcher = watch(root, (_event, name) => {
-      if (String(name) !== DESIGN_DIR || !existsSync(design)) return;
+    if (closed) return;
+    try {
+      rootWatcher = watch(root, (_event, name) => {
+        if (String(name) !== DESIGN_DIR || !existsSync(design)) return;
+        rootWatcher?.close();
+        rootWatcher = null;
+        watchDesign();
+      });
+    } catch {
+      // The workspace folder is gone: nothing left to watch.
+      rootWatcher = null;
+      return;
+    }
+    rootWatcher.on("error", () => {
       rootWatcher?.close();
       rootWatcher = null;
-      watchDesign();
     });
   };
   if (existsSync(design)) watchDesign();
   else watchRoot();
   return () => {
+    closed = true;
     if (timer) clearTimeout(timer);
     if (settle) clearTimeout(settle);
     designWatcher?.close();

@@ -177,3 +177,15 @@ test('a workspace opened at design/ itself resolves to the folder above it', asy
   assert.deepEqual(list.designs.map((d) => d.slug), ['minimal'])
   await worker.deactivate()
 })
+
+test('dc.locate refuses to guess between worktrees when none of them is focused', async () => {
+  const a = makeRoot([])
+  const b = makeRoot([])
+  const other = makeRoot([])
+  for (const r of [a, b]) writeFileSync(path.join(r, 'design/canvas.design.json'), '{"version":1,"id":"shared"}')
+  const worker = await bootMany({ wa: a, wb: b, wo: other }, 'wo')
+  const out = await worker.request('dc.locate', { text: '{"version":1,"id":"shared"}' })
+  assert.equal(out.ws, null)
+  assert.deepEqual([...(out.candidates ?? [])].sort(), ['wa', 'wb'])
+  await worker.deactivate()
+})

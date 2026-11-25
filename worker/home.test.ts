@@ -38,6 +38,7 @@ test('dc.cover streams the first artboard in chunks', async () => {
   assert.equal(part.done, true)
   assert.equal(part.width, 390)
   assert.match(part.chunk, /Tom &amp; Jerry/)
+  assert.ok(typeof part.version === 'string' && part.version.length > 0)
   await worker.deactivate()
 })
 

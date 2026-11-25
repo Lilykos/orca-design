@@ -5,24 +5,46 @@ import type { AgentRow } from "../shared/protocol";
 import { button, el } from "./dom";
 import { t } from "./i18n";
 
+/** The option value that resumes the design's recorded agent session (the worker does the resume). */
+export const RESUME = "__resume__";
+
 export interface SheetModel {
   options: { terminalId: string; label: string }[];
   selected: string | null;
   canSend: boolean;
   offerLaunch: boolean;
+  /** The agent kind to resume when the design's recorded session is not running; else null. */
+  resume: string | null;
 }
 
-/** Which agents to offer and which one is chosen at first: the recorded session, else a lone agent. */
+/**
+ * Which agents to offer and which one is chosen at first: the recorded session (resumed when it is
+ * not running, spec fix 9), else a lone agent.
+ */
 export function sheetModel(rows: readonly AgentRow[], preferred: string | null): SheetModel {
   const agents = rows.filter((row) => row.agent && row.terminalId);
-  const session = preferred && preferred.includes(":") ? preferred.slice(preferred.indexOf(":") + 1) : null;
+  const at = preferred ? preferred.indexOf(":") : -1;
+  const recordedAgent = at > 0 ? preferred!.slice(0, at) : null;
+  const session = at > 0 ? preferred!.slice(at + 1) : null;
   const options = agents.map((row) => ({
     terminalId: row.terminalId!,
     label: `${row.title ?? row.agent}${row.state === "working" ? " (working)" : ""}`,
   }));
-  const recorded = agents.find((row) => session && row.sessionId === session);
-  const selected = recorded?.terminalId ?? (agents.length === 1 ? agents[0]!.terminalId : null);
-  return { options, selected, canSend: selected !== null, offerLaunch: agents.length === 0 };
+  const running = agents.find((row) => session && row.sessionId === session);
+  const resume = !running && recordedAgent && session ? recordedAgent : null;
+  if (resume) options.unshift({ terminalId: RESUME, label: `Resume this design's ${resume} session` });
+  const selected = running?.terminalId ?? (resume ? RESUME : agents.length === 1 ? agents[0]!.terminalId : null);
+  return { options, selected, canSend: selected !== null, offerLaunch: options.length === 0, resume };
+}
+
+/** Whether the sheet may close: not while it is sending or starting an agent (that would lose track of it). */
+export function sheetState(): { busy: boolean; requestClose(): boolean } {
+  return {
+    busy: false,
+    requestClose() {
+      return !this.busy;
+    },
+  };
 }
 
 export interface SheetOptions {
@@ -37,23 +59,32 @@ export interface SheetOptions {
 /** Shows the sheet; resolves true once sent or launched, false when cancelled. */
 export function openSendSheet(options: SheetOptions): Promise<boolean> {
   const model = sheetModel(options.rows, options.preferred);
+  const state = sheetState();
   return new Promise((resolve) => {
     const veil = el("div", "dc-sheet-veil");
     const sheet = el("div", "dc-sheet");
     veil.append(sheet);
-    const close = (done: boolean) => {
+    const finish = (done: boolean) => {
       veil.remove();
       resolve(done);
+    };
+    const close = (done: boolean) => {
+      if (done || state.requestClose()) finish(done);
     };
     sheet.append(el("h3", "", t("sendSheetTitle")), el("pre", "", options.text), el("div", "dc-hint", t("sendSheetHint")));
     const row = el("div", "dc-row");
     const run = async (action: () => Promise<void>, control: HTMLButtonElement) => {
       control.disabled = true;
+      cancel.disabled = true;
+      state.busy = true;
       try {
         await action();
+        state.busy = false;
         close(true);
       } catch (error) {
+        state.busy = false;
         control.disabled = false;
+        cancel.disabled = false;
         sheet.append(el("div", "dc-error", error instanceof Error ? error.message : String(error)));
       }
     };
