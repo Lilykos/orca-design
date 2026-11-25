@@ -106,6 +106,21 @@ async function boot(): Promise<void> {
   });
 
   orca.on("theme", () => handle.setTheme(readTheme()));
+  // "Design: New design…" leaves a note in storage; it may arrive before or after the canvas opens.
+  const pendingKey = `pendingNew:${ws}`;
+  const takePending = async () => {
+    try {
+      if ((await orca.storage.get(pendingKey)) !== true) return;
+      await orca.storage.delete(pendingKey);
+      handle.startNew();
+    } catch {
+      // Storage unavailable: the command still opened the canvas.
+    }
+  };
+  orca.storage.onDidChange(({ key }) => {
+    if (key === pendingKey) void takePending();
+  });
+  void takePending();
   orca.plugin.on("dc.changed", (change) => {
     if (change.ws === ws) handle.refresh(change.slugs, change.list);
   });

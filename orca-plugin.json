@@ -45,6 +45,39 @@
         "frame": "isolated",
         "priority": "default"
       }
+    ],
+    "commands": [
+      {
+        "id": "design.openCanvas",
+        "title": "Design: Open canvas",
+        "when": "workspace"
+      },
+      {
+        "id": "design.newDesign",
+        "title": "Design: New design\u2026",
+        "when": "workspace"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "design.openCanvas",
+        "key": "Mod+Alt+D",
+        "when": "workspace"
+      }
+    ],
+    "statusBarItems": [
+      {
+        "id": "design",
+        "text": "Design",
+        "icon": "layers",
+        "tooltip": "Open the design canvas",
+        "command": "design.openCanvas"
+      }
+    ],
+    "events": [
+      {
+        "on": "workspace.changed"
+      }
     ]
   }
 }

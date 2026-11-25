@@ -96,6 +96,8 @@ export interface CanvasOptions {
 export interface CanvasHandle {
   setTheme(colors: ThemeColors): void;
   setAgentStatus(status: AgentStatus): void;
+  /** Orca: opens the new-design card (the "Design: New design…" command). */
+  startNew(): void;
   /** Files changed on disk (Orca pushes this): re-read the list and/or the shown design now. */
   refresh(slugs: readonly string[], list: boolean): void;
   /** Shows this design. */
@@ -2145,6 +2147,9 @@ export function mountCanvas(options: CanvasOptions): CanvasHandle {
   return {
     setTheme(colors) {
       applyTheme(root, colors);
+    },
+    startNew() {
+      openNewDesign();
     },
     refresh(slugs, listChanged) {
       if (listChanged) forceList = true;
