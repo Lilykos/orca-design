@@ -12,7 +12,10 @@ import {
 } from "../shared/design";
 import { tweakValueSchema } from "../shared/tweaks";
 import type { ArtboardView } from "../shared/views";
+import * as agents from "./agents";
 import { sliceChunk, UploadBuffer } from "./chunks";
+import { newDesignPrompt } from "../shared/prompts";
+import { designKindSchema } from "../shared/design";
 import { PathError } from "./paths";
 import * as store from "./store";
 import { summarizePaths, watchRoot } from "./watch";
@@ -172,6 +175,29 @@ export function registerHandlers(orca: OrcaWorkerApi, deps: HandlerDeps = { now:
     }
     return {};
   });
+
+  handle("dc.agents", ws.extend({ slug: slugSchema.optional() }), async ({ ws: workspaceId, slug }, root) => ({
+    rows: (await agents.listAgents(host, workspaceId)).filter((row) => row.agent !== null && row.terminalId !== null),
+    preferred: slug ? ((await store.readDesignAgents(root))[slug] ?? null) : null,
+  }));
+
+  handle(
+    "dc.send",
+    design.extend({
+      kind: z.enum(["comments", "tweaks", "apply-tweaks", "new"]),
+      text: z.string().min(1).max(200_000),
+      terminalId: z.string().min(1).optional(),
+    }),
+    async ({ ws: workspaceId, slug, kind, text, terminalId }, root) =>
+      agents.send(host, { workspaceId, root, slug, kind, text, terminalId }, deps.now()),
+  );
+
+  handle(
+    "dc.start",
+    ws.extend({ brief: z.string().trim().min(1).max(20_000), kind: designKindSchema.optional(), agent: z.string().min(1).max(40) }),
+    async ({ ws: workspaceId, brief, kind, agent }, root) =>
+      agents.start(host, { workspaceId, root, agent, text: newDesignPrompt(brief, kind) }, deps.now()),
+  );
 
   return () => {
     for (const stop of unwatch.values()) stop();

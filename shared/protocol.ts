@@ -73,3 +73,28 @@ declare module "orca" {
     "dc.changed": { ws: string; slugs: string[]; list: boolean };
   }
 }
+
+/** An agent in a workspace, as Orca's agents.list reports it. */
+export interface AgentRow {
+  terminalId: string | null;
+  title: string | null;
+  agent: string | null;
+  state: string;
+  sessionId: string | null;
+}
+
+export type RequestKind = "comments" | "tweaks" | "apply-tweaks" | "new";
+
+declare module "orca" {
+  interface PluginRequests {
+    "dc.agents": { input: WsInput & { slug?: string }; output: { rows: AgentRow[]; preferred: string | null } };
+    "dc.send": {
+      input: DesignInput & { kind: RequestKind; text: string; terminalId?: string };
+      output: { terminalId: string; request: string };
+    };
+    "dc.start": {
+      input: WsInput & { brief: string; kind?: string; agent: string };
+      output: { terminalId: string; request: string };
+    };
+  }
+}
