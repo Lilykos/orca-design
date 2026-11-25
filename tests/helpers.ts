@@ -16,7 +16,8 @@ export function workspaces(map: Record<string, string>) {
     'workspace.list': {
       workspaces: Object.entries(map).map(([id, root]) => ({
         id, kind: 'worktree', name: path.basename(root), project: 'p', projectId: 'p1', path: root, branch: 'main', hostId: 'local'
-      }))
+      })),
+      truncated: false
     }
   }
 }
