@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "title": "Minimal",
+  "kind": "wireframe",
+  "artboards": [{ "id": "a", "title": "A", "file": "a.html", "width": 390, "height": 844 }]
+}
