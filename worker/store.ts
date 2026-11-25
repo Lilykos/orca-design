@@ -91,12 +91,15 @@ export async function isInitialized(root: string): Promise<boolean> {
   return false;
 }
 
-/** Creates design/canvas.json and the agents' guide when missing. Returns whether it created the marker. */
+/**
+ * Creates design/canvas.design.json (the file that opens the canvas) and the agents' guide when
+ * missing. Returns whether it created the entry. Paseo's canvas.json is never written.
+ */
 export async function initCanvas(root: string): Promise<boolean> {
   const dir = designRoot(root);
   await mkdir(dir, { recursive: true });
   await refreshGuide(root);
-  const marker = path.join(dir, CANVAS_FILE);
+  const marker = path.join(dir, CANVAS_ENTRY);
   try {
     await stat(marker);
     return false;
