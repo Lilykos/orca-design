@@ -89,6 +89,8 @@ function base64ToBytes(base64: string): Uint8Array {
 
 export function createApi(ws: string, request: Requester, hooks: ApiHooks = { currentSlug: () => null }): CanvasApi {
   const call = (name: string, input: Record<string, unknown> = {}) => request(name, { ws, ...input });
+  /** Each board's page as it last came whole, by its version: a page whose version has not changed is not fetched again. */
+  const pages = new Map<string, { version: string; html: string }>();
 
   async function deliver(request: SendRequest): Promise<void> {
     if (hooks.confirm) {
@@ -107,8 +109,13 @@ export function createApi(ws: string, request: Requester, hooks: ApiHooks = { cu
     async getDesign(slug) {
       const meta: DesignView = await call("dc.design", { slug });
       const artboards = await inBatches(meta.artboards, PARALLEL_PAGES, async (board): Promise<ArtboardView> => {
+        const key = `${slug}\0${board.id}`;
+        const known = pages.get(key);
+        if (known && known.version === board.version) return { ...board, html: known.html };
         const { text, last } = await readChunks((offset) => call("dc.artboard", { slug, artboardId: board.id, offset }));
-        return { ...board, html: last.error ? null : text, error: last.error, version: last.version, source: last.source };
+        const html = last.error ? null : text;
+        if (html !== null) pages.set(key, { version: last.version, html });
+        return { ...board, html, error: last.error, version: last.version, source: last.source };
       });
       return { ...meta, artboards };
     },
