@@ -6,7 +6,7 @@ import { CHUNK } from "../shared/protocol";
 import { buildSrcdoc } from "../editor/runtime";
 import { readChunks } from "../editor/api";
 
-const request = (name: string, input: unknown) => orca.plugin.request(name as never, input as never) as Promise<any>;
+const request = (name: string, input: unknown, options?: { timeoutMs: number }) => orca.plugin.request(name as never, input as never, options) as Promise<any>;
 
 const css = `
 :root { color-scheme: light dark; }
@@ -141,7 +141,7 @@ async function startDesign(): Promise<void> {
     await orca.storage.set("home:lastWs", ws);
     const known = designs.filter((design) => design.ws === ws).map((design) => design.slug);
     await orca.storage.set(`expectNew:${ws}`, known);
-    await request("dc.start", { ws, brief: text, ...(kind === "other" ? {} : { kind }), agent: agentSelect.value });
+    await request("dc.start", { ws, brief: text, ...(kind === "other" ? {} : { kind }), agent: agentSelect.value }, { timeoutMs: 120000 });
     await request("dc.openCanvas", { ws });
     brief.value = "";
   } catch (error) {
@@ -172,7 +172,7 @@ async function importZip(file: File | null): Promise<void> {
     const base64 = await fileToBase64(file);
     const { id } = await request("dc.import.begin", { ws });
     for (let at = 0; at < base64.length; at += CHUNK) await request("dc.import.part", { ws, id, part: base64.slice(at, at + CHUNK) });
-    const result = await request("dc.import.commit", { ws, id });
+    const result = await request("dc.import.commit", { ws, id }, { timeoutMs: 120000 });
     await request("dc.open", { ws, slug: result.slug });
     await refresh();
   } catch (error) {
