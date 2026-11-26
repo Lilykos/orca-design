@@ -1487,7 +1487,10 @@ export function mountCanvas(options: CanvasOptions): CanvasHandle {
         renderMenu();
       }, "dc-btn dc-mini");
       const yes = button(t("deleteConfirm"), null, () => void deleteFromMenu(summary, yes), "dc-btn dc-mini dc-mini-danger");
-      item.append(mark, el("span", "dc-menu-title", t("deleteDesignTitle", { title: titleOf(summary) })), no, yes);
+      // Orca: the buttons sit on their own line, right-aligned, so the question is never squeezed.
+      const actions = el("div", "dc-asking-actions");
+      actions.append(no, yes);
+      item.append(mark, el("span", "dc-menu-title", t("deleteDesignTitle", { title: titleOf(summary) })), actions);
       setTimeout(() => yes.focus(), 0);
       return item;
     }
