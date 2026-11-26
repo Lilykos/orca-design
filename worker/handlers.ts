@@ -138,6 +138,7 @@ export function registerHandlers(orca: OrcaWorkerApi, deps: HandlerDeps = { now:
   // The pages dc.design renders are the ones the editor asks for next, so they are kept for dc.artboard.
   handle("dc.design", design, async ({ slug }, root) => {
     const at = deps.now();
+    forget(renders, at);
     return store.viewDesignMeta(root, slug, (page, version) => {
       renders.set(renderKey(root, slug, page.id), { view: page, version, at });
     });
