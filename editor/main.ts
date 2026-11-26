@@ -57,7 +57,7 @@ async function boot(): Promise<void> {
   document.documentElement.style.height = "100%";
   document.body.style.cssText = "margin:0;height:100%;position:relative;overflow:hidden;background:var(--orca-background)";
   // The document only marks where the canvas lives: its id names the workspace (Orca never tells an
-  // editor its file's path). The focused workspace is the fallback.
+  // editor its file's path). Without a document text, the focused workspace is the fallback.
   const doc = await orca.document?.get();
   const text = doc?.content.kind === "text" ? doc.content.text : "";
   let ws: string | undefined;
@@ -70,7 +70,11 @@ async function boot(): Promise<void> {
       );
       return;
     }
-    ws = located.ws ?? undefined;
+    if (!located.ws) {
+      notice("This file isn't a design canvas entry. Use Design: Open canvas to open a workspace's canvas.");
+      return;
+    }
+    ws = located.ws;
   }
   if (!ws) ws = ((await orca.host.call("workspace.readContext", {})) as { workspaceId?: string } | null)?.workspaceId;
   if (!ws) {
