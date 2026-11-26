@@ -9,7 +9,10 @@ import { pickZip } from "./files";
 import { t } from "./i18n";
 import type { ThemeColors } from "./styles";
 
-const request = (name: string, input: unknown) => orca.plugin.request(name as never, input as never) as Promise<any>;
+const request = (name: string, input: unknown, options?: { timeoutMs: number }) =>
+  orca.plugin.request(name as never, input as never, options) as Promise<any>;
+/** A send starts an agent or waits for its terminal: longer than the default 30 s. */
+const SEND_TIMEOUT = { timeoutMs: 120_000 };
 
 function css(name: string, fallback: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
@@ -91,11 +94,11 @@ async function boot(): Promise<void> {
         async onSend(terminalId) {
           // RESUME: no terminal, so the worker resumes the design's recorded session first.
           const target = terminalId === RESUME ? {} : { terminalId };
-          await request("dc.send", { ws, ...(req.slug ? { slug: req.slug } : {}), kind: req.kind, text: req.text, ...target });
+          await request("dc.send", { ws, ...(req.slug ? { slug: req.slug } : {}), kind: req.kind, text: req.text, ...target }, SEND_TIMEOUT);
         },
         async onLaunch(agent) {
-          if (req.slug) await request("dc.launch", { ws, slug: req.slug, kind: req.kind, text: req.text, agent });
-          else await request("dc.start", { ws, brief: req.brief ?? req.text, agent });
+          if (req.slug) await request("dc.launch", { ws, slug: req.slug, kind: req.kind, text: req.text, agent }, SEND_TIMEOUT);
+          else await request("dc.start", { ws, brief: req.brief ?? req.text, agent }, SEND_TIMEOUT);
         },
       });
     },
