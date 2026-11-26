@@ -217,7 +217,8 @@ export const CANVAS_CSS = `
 .dc-num.pending { background: #d97757; } .dc-num.sent { background: #3b82f6; } .dc-num.resolved { background: #16a34a; }
 .dc-item-body { margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .dc-item-meta { margin-top: 2px; font-size: 12px; color: var(--dc-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dc-side-foot { padding: 10px; border-top: 1px solid var(--dc-border); display: flex; flex-direction: column; gap: 6px; }
+/* Orca: 56px on the right keeps the editor's floating button in the bottom-right corner clear of the buttons. */
+.dc-side-foot { padding: 10px 56px 10px 10px; border-top: 1px solid var(--dc-border); display: flex; flex-direction: column; gap: 6px; }
 .dc-side-foot .dc-btn { justify-content: center; }
 .dc-check { display: flex; gap: 6px; align-items: center; color: var(--dc-muted); font-size: 12px; cursor: pointer; }
 .dc-toast { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 30; padding: 8px 14px; border-radius: 8px;
@@ -237,4 +238,7 @@ export const CANVAS_CSS = `
 .dc-sheet pre { margin: 0; flex: 1; min-height: 120px; overflow: auto; padding: 10px; border-radius: 6px; border: 1px solid var(--dc-border);
   background: var(--dc-bg); font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
 .dc-sheet select { flex: 1; min-width: 0; height: 28px; border-radius: 6px; border: 1px solid var(--dc-border); background: var(--dc-bg); color: var(--dc-fg); font: inherit; }
+/* Orca: the delete confirmation wraps in the 260px menu: the question, then the buttons right-aligned below it. */
+.dc-menu-item.dc-asking { flex-wrap: wrap; height: auto; gap: 6px 8px; padding: 6px 4px 6px 8px; }
+.dc-asking-actions { flex: 0 0 100%; display: flex; justify-content: flex-end; gap: 6px; }
 `;

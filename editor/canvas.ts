@@ -1487,7 +1487,10 @@ export function mountCanvas(options: CanvasOptions): CanvasHandle {
         renderMenu();
       }, "dc-btn dc-mini");
       const yes = button(t("deleteConfirm"), null, () => void deleteFromMenu(summary, yes), "dc-btn dc-mini dc-mini-danger");
-      item.append(mark, el("span", "dc-menu-title", t("deleteDesignTitle", { title: titleOf(summary) })), no, yes);
+      // Orca: the buttons sit on their own line, right-aligned, so the question is never squeezed.
+      const actions = el("div", "dc-asking-actions");
+      actions.append(no, yes);
+      item.append(mark, el("span", "dc-menu-title", t("deleteDesignTitle", { title: titleOf(summary) })), actions);
       setTimeout(() => yes.focus(), 0);
       return item;
     }
@@ -1642,7 +1645,11 @@ export function mountCanvas(options: CanvasOptions): CanvasHandle {
   function renderMenu(): void {
     if (!menu) return;
     menu.innerHTML = "";
-    for (const summary of list?.designs ?? []) menu.append(menuRow(summary));
+    // Orca: sorted by title, not by folder name. The current design is still checked.
+    const designs = [...(list?.designs ?? [])].sort((a, b) =>
+      titleOf(a).localeCompare(titleOf(b), undefined, { sensitivity: "base" }),
+    );
+    for (const summary of designs) menu.append(menuRow(summary));
     menu.append(el("div", "dc-menu-sep"));
     const add = el("button", "dc-menu-pick dc-menu-new");
     add.type = "button";
