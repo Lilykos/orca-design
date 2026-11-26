@@ -19,7 +19,8 @@ points at elements and writes comments, and asks you to revise.
 
 ## The canvas CLI
 
-Run these from the workspace root. Each prints JSON and exits 0 (ok), 1 (usage) or 2 (invalid).
+Run these from the folder that contains \`design/\`. When your workspace is the \`design/\` folder itself,
+drop the prefix and use \`node .canvas/dc.mjs\` instead. Each prints JSON and exits 0 (ok), 1 (usage) or 2 (invalid).
 
 - \`${CLI} create <slug> '<json>'\`: makes \`design/<slug>/\` with design.json and a placeholder page per
   artboard, which you then overwrite. The JSON is \`{"title", "kind", "description"?, "artboards": [{"id",
