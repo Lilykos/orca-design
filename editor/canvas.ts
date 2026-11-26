@@ -1645,7 +1645,11 @@ export function mountCanvas(options: CanvasOptions): CanvasHandle {
   function renderMenu(): void {
     if (!menu) return;
     menu.innerHTML = "";
-    for (const summary of list?.designs ?? []) menu.append(menuRow(summary));
+    // Orca: sorted by title, not by folder name. The current design is still checked.
+    const designs = [...(list?.designs ?? [])].sort((a, b) =>
+      titleOf(a).localeCompare(titleOf(b), undefined, { sensitivity: "base" }),
+    );
+    for (const summary of designs) menu.append(menuRow(summary));
     menu.append(el("div", "dc-menu-sep"));
     const add = el("button", "dc-menu-pick dc-menu-new");
     add.type = "button";
