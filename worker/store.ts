@@ -532,7 +532,8 @@ export async function importDesign(root: string, zip: Buffer): Promise<ImportRes
   if (top.length > 1) throw new Error("The zip has more than one design; import them one at a time");
   const prefix = top[0]!.segments!.slice(0, -2);
   const from = top[0]!.segments!.at(-2)!;
-  const manifest = manifestSchema.safeParse(JSON.parse(top[0]!.entry.data.toString("utf8")));
+  const json = JSON.parse(top[0]!.entry.data.toString("utf8"));
+  const manifest = manifestSchema.safeParse(json);
   if (!manifest.success) throw new Error(`${from}/${MANIFEST_FILE}: ${formatZodError(manifest.error)}`);
 
   const own: { rel: string[]; data: Buffer }[] = [];
@@ -551,7 +552,14 @@ export async function importDesign(root: string, zip: Buffer): Promise<ImportRes
   return serialize(path.join(base, "#import"), async () => {
     const stem = (slugSchema.safeParse(from).success ? from : slugify(manifest.data.title)).slice(0, 56);
     let slug = stem;
-    for (let n = 2; await exists(designDir(root, slug)); n++) slug = `${stem}-${n}`;
+    let suffix = 0;
+    for (let n = 2; await exists(designDir(root, slug)); n++) {
+      slug = `${stem}-${n}`;
+      suffix = n;
+    }
+    // The copy's title carries the same number as its folder, so two designs don't both read "Minimal".
+    const title = suffix ? copyTitle(manifest.data.title, suffix) : manifest.data.title;
+    const retitled = suffix ? Buffer.from(`${JSON.stringify({ ...json, title }, null, 2)}\n`, "utf8") : null;
 
     // Shared files first: one that would land outside design/ stops the import before the design appears.
     const kept: string[] = [];
@@ -583,7 +591,8 @@ export async function importDesign(root: string, zip: Buffer): Promise<ImportRes
       for (const file of own) {
         const target = path.join(staging, ...file.rel);
         await mkdir(path.dirname(target), { recursive: true });
-        await writeFile(target, file.data);
+        const isManifest = file.rel.length === 1 && file.rel[0] === MANIFEST_FILE;
+        await writeFile(target, retitled && isManifest ? retitled : file.data);
       }
       await rename(staging, designDir(root, slug));
     } catch (error) {
@@ -591,8 +600,14 @@ export async function importDesign(root: string, zip: Buffer): Promise<ImportRes
       throw error;
     }
 
-    return { slug, title: manifest.data.title, kept };
+    return { slug, title, kept };
   });
+}
+
+/** "Minimal" becomes "Minimal (2)"; a long title is cut so the result still fits the manifest. */
+function copyTitle(title: string, n: number): string {
+  const suffix = ` (${n})`;
+  return `${title.slice(0, 200 - suffix.length)}${suffix}`;
 }
 
 function slugify(title: string): string {

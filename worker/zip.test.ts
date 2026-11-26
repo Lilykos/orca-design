@@ -16,6 +16,8 @@ test('export then import round-trips a design and renames a taken slug', async (
     readFileSync(path.join(to, 'design/minimal-2/a.html'), 'utf8'),
     readFileSync(path.join(from, 'design/minimal/a.html'), 'utf8')
   )
+  assert.equal(JSON.parse(readFileSync(path.join(to, 'design/minimal-2/design.json'), 'utf8')).title, 'Minimal (2)')
+  assert.equal(result.title, 'Minimal (2)')
 })
 
 test('export leaves out dot-folders such as the request history', async () => {
