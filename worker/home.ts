@@ -19,7 +19,7 @@ export async function listHome(host: HostCaller): Promise<{ designs: HomeDesign[
   await Promise.all(
     rows.map(async (row) => {
       const root = designHome(row.path);
-      // Worktrees of one folder show its designs once.
+      // Dedupe by the folder that holds design/: a workspace opened at design/ maps to its parent, so the two show its designs once.
       if (seen.has(root)) return;
       seen.add(root);
       if (!(await store.isInitialized(root).catch(() => false))) return;

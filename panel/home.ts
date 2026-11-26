@@ -257,20 +257,32 @@ function renderList(): void {
   }
 }
 
+// Fix #10: a refresh asked for while one runs queues exactly one more, so no change is dropped.
 let refreshing = false;
+let refreshAgain = false;
 async function refresh(): Promise<void> {
-  if (refreshing) return;
+  if (refreshing) {
+    refreshAgain = true;
+    return;
+  }
   refreshing = true;
   try {
-    const home = await request("dc.home", {});
-    workspaces = home.workspaces;
-    const changed = JSON.stringify(home.designs.map((d: HomeDesign) => [d.ws, d.slug, d.updatedAt])) !== JSON.stringify(designs.map((d) => [d.ws, d.slug, d.updatedAt]));
-    designs = home.designs;
-    renderWorkspaces();
-    if (changed) renderList();
+    do {
+      refreshAgain = false;
+      await loadHome();
+    } while (refreshAgain);
   } finally {
     refreshing = false;
   }
+}
+
+async function loadHome(): Promise<void> {
+  const home = await request("dc.home", {});
+  workspaces = home.workspaces;
+  const changed = JSON.stringify(home.designs.map((d: HomeDesign) => [d.ws, d.slug, d.updatedAt])) !== JSON.stringify(designs.map((d) => [d.ws, d.slug, d.updatedAt]));
+  designs = home.designs;
+  renderWorkspaces();
+  if (changed) renderList();
 }
 
 /** Fix #11: the focused workspace, else the one the panel last used; null otherwise. */
