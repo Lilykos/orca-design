@@ -30,7 +30,7 @@ select { min-width: 0; flex: 1; height: 28px; border: 1px solid var(--orca-input
 .design { display: block; width: 100%; text-align: left; padding: 0; border: 1px solid var(--orca-border); border-radius: var(--orca-radius, 8px); overflow: hidden;
   background: var(--orca-card); color: inherit; font: inherit; cursor: pointer; }
 .design:hover { border-color: var(--orca-ring); }
-.thumb { position: relative; overflow: hidden; background: #fff; height: 150px; pointer-events: none; }
+.thumb { position: relative; overflow: hidden; background: var(--orca-muted); height: 150px; pointer-events: none; }
 .thumb iframe { position: absolute; left: 0; top: 0; border: 0; transform-origin: 0 0; }
 .meta { padding: 8px 10px; }
 .meta b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -227,9 +227,11 @@ async function loadCover(thumb: HTMLElement): Promise<void> {
     frame.setAttribute("sandbox", "allow-scripts");
     frame.setAttribute("scrolling", "no");
     frame.tabIndex = -1;
-    const scale = thumb.clientWidth / last.width;
+    // Fix #21: a narrow artboard is never scaled up; it is centred on the muted thumbnail background.
+    const scale = Math.min(1, thumb.clientWidth / last.width);
     frame.style.width = `${last.width}px`;
     frame.style.height = `${Math.ceil(150 / scale)}px`;
+    frame.style.left = `${Math.max(0, (thumb.clientWidth - last.width * scale) / 2)}px`;
     frame.style.transform = `scale(${scale})`;
     // A thumbnail never scrolls.
     frame.srcdoc = buildSrcdoc(text).replace(/<\/head>/i, "<style>html,body{overflow:hidden!important}</style></head>");
