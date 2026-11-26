@@ -19,10 +19,15 @@ Unit = covered by `orca plugin test .` only.
 | Workspace opened at `design/` itself | Live | ✅ |
 | Status bar item | Live | ✅ shown |
 | Home panel: composer, recents, thumbnails | Live | ✅ |
-| Home panel: open a design → its canvas | Unit | ✅ order workspace.open → editor.open |
-| Move element / text edit + undo/redo | Unit (store) | ⚠️ not exercised live |
-| Tweaks panel and hover highlighting | — | ⚠️ not exercised (no fixture with tweaks) |
-| Export (save dialog) / import zip | Unit (round trip) | ⚠️ dialog not exercised live |
-| Trash then restore by moving the folder back | Unit | ⚠️ not exercised live |
-| Explorer click opens canvas.design.json in the canvas by default | — | ⚠️ not checked (opened via `orca plugin open`) |
-| Picker preselects the focused workspace (folder workspaces) | Live | ❌ picks the first; minor, deferred |
+| Home panel: open a design → its canvas | Live (dc.open) | ✅ canvas switched to the design |
+| Move element (arrow nudges and a mouse drag) + undo/redo | Live (2026-11-26) | ✅ `translate` written; each nudge is one undo step; undoing all leaves no `style` |
+| Text edit in place (Enter, type, Enter) + undo | Live (2026-11-26) | ✅ written and restored |
+| Tweaks: color, range, toggle; live apply; tweaks.json/tweaks.css; Reset; hover outlines | Live (2026-11-26) | ✅ ("Write into design" and "Ask the agent for tweaks" not run: they message an agent, same path as comments) |
+| Export via Orca's save dialog | Live (2026-11-26) | ✅ dialog appears after chunked download; zip correct, but includes `.requests/` (#19) |
+| Import zip from the canvas menu | Live (2026-11-26) | ✅ imported as `minimal-2`; same title as the original (#20) |
+| Delete to `.trash/`, restore by moving the folder back | Live (2026-11-26) | ✅ (confirm buttons clipped, #22) |
+| Explorer click opens canvas.design.json in the canvas by default | Live (2026-11-26) | ✅ |
+| Home panel picker preselects the focused workspace | Live | ❌ picks the first (#11) |
+| Home panel thumbnails of narrow artboards | Live | ❌ upscaled (#21) |
+| Side panel footer vs Orca's floating button | Live | ❌ overlaps (#23) |
+| Design menu order | Live | ⚠️ by folder, not title (#24) |
