@@ -4,6 +4,7 @@
   "name": "Design canvas",
   "version": "0.1.0",
   "description": "Where people and agents design together: HTML artboards on a canvas, with comments, edits and tweaks the agent revises.",
+  "icon": "assets/icon.png",
   "engines": {
     "orca": ">=1.4.259"
   },
@@ -42,6 +43,7 @@
           ".design.json"
         ],
         "entry": "editor/main.ts",
+        "icon": "assets/icon.png",
         "frame": "isolated",
         "priority": "default"
       }
