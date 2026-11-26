@@ -64,6 +64,7 @@ so open only designs you trust.
 
 ```bash
 npm install && npm run vendor      # bundles vendor/zod.js and assets/dc.mjs
+orca plugin types .                # once in a fresh checkout: writes the .orca/types that tsconfig.json extends
 orca plugin test . && npx tsc -p . && orca plugin check .
 orca plugin dev load .             # asks for approval
 ```

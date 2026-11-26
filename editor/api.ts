@@ -117,6 +117,9 @@ export function createApi(ws: string, request: Requester, hooks: ApiHooks = { cu
         if (html !== null) pages.set(key, { version: last.version, html });
         return { ...board, html, error: last.error, version: last.version, source: last.source };
       });
+      // Pages of artboards this design no longer has are dropped; other designs' pages stay.
+      const live = new Set(meta.artboards.map((board) => `${slug}\0${board.id}`));
+      for (const key of pages.keys()) if (key.startsWith(`${slug}\0`) && !live.has(key)) pages.delete(key);
       return { ...meta, artboards };
     },
     getDesignVersion: async (slug) => (await call("dc.version", { slug })).version,

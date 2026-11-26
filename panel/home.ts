@@ -212,6 +212,8 @@ const empty = el("div", "hint", "No designs yet. Describe one above, or open a w
 const observer = new IntersectionObserver((entries) => {
   for (const entry of entries) {
     if (!entry.isIntersecting) continue;
+    // A hidden thumbnail has no width to scale to: it stays observed and is tried again when it shows.
+    if ((entry.target as HTMLElement).clientWidth === 0) continue;
     observer.unobserve(entry.target);
     void loadCover(entry.target as HTMLElement);
   }
@@ -220,9 +222,19 @@ const observer = new IntersectionObserver((entries) => {
 async function loadCover(thumb: HTMLElement): Promise<void> {
   const { ws, slug } = thumb.dataset;
   if (!ws || !slug) return;
+  // Hidden: observe it again and load the cover when it shows, before any download.
+  if (thumb.clientWidth === 0) {
+    observer.observe(thumb);
+    return;
+  }
   try {
     const { text, last } = await readChunks((offset) => request("dc.cover", { ws, slug, offset }));
     if (!text || !last.width) return;
+    if (thumb.clientWidth === 0) {
+      // Hidden while the cover loaded: observe it again and build the frame when it shows.
+      observer.observe(thumb);
+      return;
+    }
     const frame = el("iframe");
     frame.setAttribute("sandbox", "allow-scripts");
     frame.setAttribute("scrolling", "no");
