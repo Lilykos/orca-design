@@ -19,3 +19,11 @@ tweaks, export/import, trash), with:
 - **Anchor text** separates an element's text pieces with " · ".
 - **Send preview:** every send shows the exact request and the agent it goes to.
 - Workspaces Orca opened at `design/` itself work; pages over 1 MiB load in chunks.
+- **Resize** named elements from the selection's corner handle (Shift keeps the ratio), with undo.
+- **Home panel** preselects the focused workspace and never defaults to an unrelated one; thumbnails no
+  longer blow up narrow artboards.
+- **Safer files:** exports and imports leave out `.requests/`; `design/.canvas/` and `.requests/` get a
+  `.gitignore`; writes refuse folders symlinked outside `design/`; an imported copy is titled "(2)".
+- **Sturdier transfers:** smaller, surrogate-safe chunks; longer timeouts for starting agents; a write
+  that races an agent's edit is refused; pages render once per load and unchanged ones aren't refetched.
+- Plugin icon; the design menu is sorted by title; small layout fixes in the menu and side panel.
