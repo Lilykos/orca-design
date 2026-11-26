@@ -18,8 +18,9 @@ the Paseo plugin open unchanged.
   sidebar also starts designs (prototype — wireframe or high fidelity — or other, a workspace and an agent),
   imports exported zips, and lists recent designs from every workspace with live thumbnails.
 - On the canvas: **Move** (V), **Hand** (H, or hold Space), **Comment** (C), **Preview** (P); scroll to pan,
-  `Cmd/Ctrl`+scroll to zoom, `Cmd/Ctrl+0` to fit, `Shift+G` for the layout grid; `Cmd/Ctrl+Z` undoes moves
-  and text edits.
+  `Cmd/Ctrl`+scroll to zoom, `Cmd/Ctrl+0` to fit, `Shift+G` for the layout grid. **Move** drags a named
+  element, and dragging the bottom-right handle of the selected one resizes it (Shift keeps the ratio).
+  `Cmd/Ctrl+Z` undoes moves, resizes and text edits.
 - **Comment** picks the nearest named element (Alt+click: the exact one). The popover's breadcrumb steps
   to the parent (↑, or Alt+↑) and back (↓). Comments wait as numbered pins until **Send to the agent**,
   which shows the exact request and lets you pick the agent — or start Claude when none is running.
