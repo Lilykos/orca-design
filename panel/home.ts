@@ -222,6 +222,11 @@ const observer = new IntersectionObserver((entries) => {
 async function loadCover(thumb: HTMLElement): Promise<void> {
   const { ws, slug } = thumb.dataset;
   if (!ws || !slug) return;
+  // Hidden: observe it again and load the cover when it shows, before any download.
+  if (thumb.clientWidth === 0) {
+    observer.observe(thumb);
+    return;
+  }
   try {
     const { text, last } = await readChunks((offset) => request("dc.cover", { ws, slug, offset }));
     if (!text || !last.width) return;
