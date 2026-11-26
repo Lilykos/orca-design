@@ -5,8 +5,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { z } from "../vendor/zod.js";
-import { artboardSchema, designKindSchema, DESIGN_DIR, isOpen, MANIFEST_FILE, type Manifest, manifestSchema, slugSchema } from "../shared/design";
+import { artboardSchema, CLI_FILE, designKindSchema, DESIGN_DIR, isOpen, MANIFEST_FILE, type Manifest, manifestSchema, slugSchema } from "../shared/design";
 import { formatComment, formatTweaks } from "../shared/prompts";
 import { tweaksListSchema } from "../shared/tweaks";
 import { designDir, designRoot } from "../worker/paths";
@@ -29,8 +30,14 @@ class Exit extends Error {
 const usage = (message: string) => new Exit(1, { ok: false, error: message, usage: USAGE });
 const invalid = (message: string, extra: Record<string, unknown> = {}) => new Exit(2, { ok: false, error: message, ...extra });
 
-/** The workspace root: the nearest folder upward from here that has design/ (else here). */
+/**
+ * The workspace root. An installed CLI sits at <root>/design/.canvas/dc.mjs, so that is tried first:
+ * an agent that cd'd into a sub-folder with its own design/ still acts on this workspace. Otherwise
+ * the nearest folder upward from here that has design/ (else here).
+ */
 function findRoot(from: string): string {
+  const self = fileURLToPath(import.meta.url);
+  if (self.endsWith(path.sep + path.join(DESIGN_DIR, CLI_FILE))) return path.dirname(path.dirname(path.dirname(self)));
   for (let dir = path.resolve(from); ; dir = path.dirname(dir)) {
     if (existsSync(path.join(dir, DESIGN_DIR)) && path.basename(dir) !== DESIGN_DIR) return dir;
     if (path.dirname(dir) === dir) return path.resolve(from);
