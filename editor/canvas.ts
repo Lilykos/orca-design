@@ -2012,7 +2012,8 @@ export function mountCanvas(options: CanvasOptions): CanvasHandle {
       }
       case "unmovable": {
         const now = Date.now();
-        if (now - unmovableToastAt > 3000) toast(t(message.reason === "unit" ? "notMovableUnit" : "notMovable"));
+        const key = message.reason === "resize" ? "notResizable" : message.reason === "unit" ? "notMovableUnit" : "notMovable";
+        if (now - unmovableToastAt > 3000) toast(t(key));
         unmovableToastAt = now;
         break;
       }

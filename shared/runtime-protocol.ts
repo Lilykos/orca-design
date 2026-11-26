@@ -97,7 +97,7 @@ export const fromRuntimeSchema = z.discriminatedUnion("type", [
   /** The selection's corner handle resized a named element; `before` and `after` are its inline width and height. */
   z.object({ ...base, type: z.literal("resized"), dcId: z.string().min(1).max(120), before: moveStyleSchema, after: moveStyleSchema }),
   /** The Move tool was pressed on something it cannot move. */
-  z.object({ ...base, type: z.literal("unmovable"), reason: z.enum(["no-id", "unit"]) }),
+  z.object({ ...base, type: z.literal("unmovable"), reason: z.enum(["no-id", "unit", "resize"]) }),
   /** The user finished editing a text node in the Move tool. */
   z.object({ ...base, type: z.literal("text-edited"), target: textTargetSchema, before: editTextSchema, after: editTextSchema }),
   /** How many elements of this page each listed variable drives. */

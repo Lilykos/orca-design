@@ -183,12 +183,14 @@ export const RUNTIME_SOURCE = String.raw`(function () {
     var w = parseFloat(cs.width), h = parseFloat(cs.height);
     // An inline element ignores width and height, so there is nothing to resize.
     if (!(w > 0 && h > 0)) return;
+    // The press must not start a text selection; the drag itself is kept from selecting text in pointermove.
+    event.preventDefault();
     // A width or height in % or em would not survive undo, since only px is written back.
     var units = (el.style.width && !PX.test(el.style.width)) || (el.style.height && !PX.test(el.style.height));
     try { window.focus(); } catch (e) {}
     drag = {
       el: el, resize: true, x: event.clientX, y: event.clientY, moved: false, w: w, h: h,
-      before: inlineOf(el, ["width", "height"]), refuse: units ? "unit" : null
+      before: inlineOf(el, ["width", "height"]), refuse: units ? "resize" : null, select: document.documentElement.style.userSelect
     };
     try { event.currentTarget.setPointerCapture(event.pointerId); } catch (e) {}
   }
@@ -660,6 +662,7 @@ export const RUNTIME_SOURCE = String.raw`(function () {
       ".sel i{position:absolute;width:8px;height:8px;margin:-4px 0 0 -4px;background:#fff;border:1.5px solid #0d99ff;box-sizing:border-box}",
       ".sel.text{border-radius:2px}.sel.text i{display:none}",
       ".sel i:nth-child(-n+3){display:none}.sel i:nth-child(4){left:100%;top:100%;pointer-events:auto;cursor:nwse-resize}",
+      ".sel i:nth-child(4)::before{content:'';position:absolute;left:-7.5px;top:-7.5px;width:20px;height:20px}",
       ".pin{position:absolute;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:10px 10px 10px 2px;",
       "color:#fff;font:600 11px/20px system-ui,sans-serif;text-align:center;pointer-events:auto;cursor:pointer;",
       "box-shadow:0 1px 3px rgba(0,0,0,.35);border:1.5px solid #fff;box-sizing:border-box;user-select:none}",
@@ -909,18 +912,21 @@ export const RUNTIME_SOURCE = String.raw`(function () {
       return;
     }
     drag.moved = true;
-    applyStyle(drag.el, dragStyle(drag, event));
+    if (drag.resize) document.documentElement.style.userSelect = "none";
+    drag.last = dragStyle(drag, event);
+    applyStyle(drag.el, drag.last);
     schedule();
   }, true);
 
-  function endDrag(event) {
+  /** Ends a drag and commits the style it last previewed. */
+  function endDrag() {
     if (!drag) return;
     var done = drag;
     drag = null;
+    if (done.resize) document.documentElement.style.userSelect = done.select;
     if (done.moved) {
-      var after = dragStyle(done, event);
-      if (done.resize) reportResized(done.el, done.before, after);
-      else reportMove(done.el, done.before, after);
+      if (done.resize) reportResized(done.el, done.before, done.last);
+      else reportMove(done.el, done.before, done.last);
     }
     schedule();
   }
