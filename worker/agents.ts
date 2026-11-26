@@ -49,8 +49,9 @@ export async function writeRequest(root: string, slug: string | null, kind: Requ
   const folder = path.join(root, dir);
   await mkdir(folder, { recursive: true });
   await assertInsideDesign(root, folder);
-  // The request history is a record, not something to commit by default.
-  await store.writeIfChanged(path.join(folder, ".gitignore"), "*\n");
+  // The request history is a record, not something to commit by default. A .gitignore the person edited stays.
+  const ignore = path.join(folder, ".gitignore");
+  if (!(await exists(ignore))) await store.writeFileAtomic(ignore, "*\n");
   let rel = path.join(dir, `${stamp(now)}-${kind}.md`);
   for (let n = 2; await exists(path.join(root, rel)); n++) rel = path.join(dir, `${stamp(now)}-${kind}-${n}.md`);
   await store.writeFileAtomic(path.join(root, rel), text.endsWith("\n") ? text : `${text}\n`);

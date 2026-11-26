@@ -156,8 +156,10 @@ export async function refreshGuide(root: string): Promise<void> {
   await mkdir(canvas, { recursive: true });
   await assertInsideDesign(root, canvas);
   await writeIfChanged(path.join(canvas, "GUIDE.md"), DESIGN_GUIDE);
-  // Generated files stay out of git status: the CLI bundle is rewritten on every plugin update.
-  await writeIfChanged(path.join(canvas, ".gitignore"), "*\n");
+  // Generated files stay out of git status: the CLI bundle is rewritten on every plugin update. A .gitignore
+  // the person edited is left as it is; only a missing one is written.
+  const ignore = path.join(canvas, ".gitignore");
+  if ((await readOrNull(ignore)) === null) await writeFileAtomic(ignore, "*\n");
   const asset = cliAsset();
   const cli = asset ? await readOrNull(asset) : null;
   if (cli) await writeIfChanged(path.join(base, CLI_FILE), cli);
