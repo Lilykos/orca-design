@@ -40,7 +40,7 @@ import { DESIGN_GUIDE, GUIDE_START } from "./guide";
 import { fileURLToPath } from "node:url";
 import { findByDcId, replaceText, setInlineStyle } from "./html-patch";
 import { inlineHtml } from "./inline";
-import { designDir, designRoot, resolveInside } from "./paths";
+import { assertInsideDesign, designDir, designRoot, resolveInside } from "./paths";
 import { readZip, writeZip, type ZipEntry } from "./zip";
 
 /** A design folder holds a few dozen files; this bounds a runaway one. */
@@ -139,7 +139,7 @@ async function readOrNull(file: string): Promise<string | null> {
   }
 }
 
-async function writeIfChanged(file: string, text: string): Promise<void> {
+export async function writeIfChanged(file: string, text: string): Promise<void> {
   if ((await readOrNull(file)) === text) return;
   await mkdir(path.dirname(file), { recursive: true });
   await writeFileAtomic(file, text);
@@ -152,7 +152,12 @@ async function writeIfChanged(file: string, text: string): Promise<void> {
  */
 export async function refreshGuide(root: string): Promise<void> {
   const base = designRoot(root);
-  await writeIfChanged(path.join(base, ".canvas", "GUIDE.md"), DESIGN_GUIDE);
+  const canvas = path.join(base, ".canvas");
+  await mkdir(canvas, { recursive: true });
+  await assertInsideDesign(root, canvas);
+  await writeIfChanged(path.join(canvas, "GUIDE.md"), DESIGN_GUIDE);
+  // Generated files stay out of git status: the CLI bundle is rewritten on every plugin update.
+  await writeIfChanged(path.join(canvas, ".gitignore"), "*\n");
   const asset = cliAsset();
   const cli = asset ? await readOrNull(asset) : null;
   if (cli) await writeIfChanged(path.join(base, CLI_FILE), cli);

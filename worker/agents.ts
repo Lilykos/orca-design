@@ -7,6 +7,7 @@ import { CLI_FILE, DESIGN_DIR, REQUESTS_DIR } from "../shared/design";
 import type { AgentRow, RequestKind } from "../shared/protocol";
 import * as store from "./store";
 import { watchRoot } from "./watch";
+import { assertInsideDesign } from "./paths";
 import type { HostCaller } from "./workspace";
 
 export type Target = { kind: "one"; row: AgentRow } | { kind: "choose"; rows: AgentRow[] } | { kind: "none" };
@@ -41,7 +42,11 @@ function stamp(now: number): string {
 /** Writes the prompt to design/[<slug>/].requests/<stamp>-<kind>.md; returns the workspace-relative path. */
 export async function writeRequest(root: string, slug: string | null, kind: RequestKind, text: string, now = Date.now()): Promise<string> {
   const dir = slug ? path.join(DESIGN_DIR, slug, REQUESTS_DIR) : path.join(DESIGN_DIR, REQUESTS_DIR);
-  await mkdir(path.join(root, dir), { recursive: true });
+  const folder = path.join(root, dir);
+  await mkdir(folder, { recursive: true });
+  await assertInsideDesign(root, folder);
+  // The request history is a record, not something to commit by default.
+  await store.writeIfChanged(path.join(folder, ".gitignore"), "*\n");
   let rel = path.join(dir, `${stamp(now)}-${kind}.md`);
   for (let n = 2; await exists(path.join(root, rel)); n++) rel = path.join(dir, `${stamp(now)}-${kind}-${n}.md`);
   await store.writeFileAtomic(path.join(root, rel), text.endsWith("\n") ? text : `${text}\n`);

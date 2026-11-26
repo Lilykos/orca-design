@@ -30,3 +30,12 @@ export async function resolveInside(allowedRoot: string, fromDir: string, refere
   if (!within(realRoot, realTarget)) throw new PathError(`${reference} links outside ${allowedRoot}`);
   return realTarget;
 }
+
+/**
+ * Refuses a folder that is not inside design/ once symlinks are followed, so the worker never
+ * writes through a link out of the workspace's design/. Call it after the folder exists.
+ */
+export async function assertInsideDesign(workspaceRoot: string, folder: string): Promise<void> {
+  const [realBase, realFolder] = await Promise.all([realpath(designRoot(workspaceRoot)), realpath(folder)]);
+  if (!within(realBase, realFolder)) throw new PathError(`${folder} links outside ${designRoot(workspaceRoot)}`);
+}
