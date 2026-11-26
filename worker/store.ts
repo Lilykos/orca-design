@@ -704,6 +704,8 @@ function patchPage(
     const file = await resolveInside(dir, dir, artboard.file);
     const text = await readFile(file, "utf8");
     if (contentHash(text) !== expected) throw new ConflictError(`${artboard.file} changed on disk`);
+    // Read again just before the write: an agent may have saved the page while the patch was made.
+    if (contentHash(await readFile(file, "utf8")) !== expected) throw new ConflictError(`${artboard.file} changed on disk`);
     await writeFileAtomic(file, patch(text, artboard));
     const view = await renderArtboard(root, slug, artboard);
     return { source: view.source, version: view.version };
