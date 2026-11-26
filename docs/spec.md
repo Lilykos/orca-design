@@ -53,8 +53,8 @@ empty-canvas brief; the same CSP and sandbox for artboards.
 
 ## Fixes and improvements (from real use)
 
-1. **Labels:** an artboard label never paints wider than its artboard on screen. It drops the size,
-   then the group, then truncates the title with an ellipsis.
+1. **Labels:** an artboard label never paints wider than its artboard on screen. It drops the group,
+   then the size, then truncates the title with an ellipsis.
 2. **No re-fit:** opening or closing the side panel keeps the zoom and the point under the centre.
 3. **Home → canvas:** opening a design from the home panel always opens its workspace and the canvas
    on that design.
