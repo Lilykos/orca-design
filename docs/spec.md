@@ -75,7 +75,7 @@ empty-canvas brief; the same CSP and sandbox for artboards.
 
 ## Non-goals
 
-Resizing elements; phone and browser clients (the editor needs the desktop app); real-time
+Phone and browser clients (the editor needs the desktop app); real-time
 multi-user editing; a design-system library; network fonts and CDNs (blocked by the CSP, as in Paseo).
 
 ## Security

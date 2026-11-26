@@ -98,16 +98,19 @@ export const anchorSchema = z.object({
 export type Anchor = z.infer<typeof anchorSchema>;
 
 const PX = "-?\\d+(?:\\.\\d+)?px";
+const SIZE = "\\d+(?:\\.\\d+)?px";
 
 /**
- * The inline style a move writes: `translate` for elements in the page's flow, `left` and `top`
- * for positioned ones. An empty string removes the property.
+ * The inline style a move or resize writes: `translate` for elements in the page's flow, `left` and
+ * `top` for positioned ones, and `width` and `height` for a resize. An empty string removes the property.
  */
 export const moveStyleSchema = z
   .object({
     translate: z.string().regex(new RegExp(`^(?:|${PX} ${PX})$`)),
     left: z.string().regex(new RegExp(`^(?:|${PX})$`)),
     top: z.string().regex(new RegExp(`^(?:|${PX})$`)),
+    width: z.string().regex(new RegExp(`^(?:|${SIZE})$`)),
+    height: z.string().regex(new RegExp(`^(?:|${SIZE})$`)),
   })
   .partial()
   .refine((style) => Object.keys(style).length > 0, "Nothing to change");

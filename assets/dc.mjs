@@ -8881,10 +8881,13 @@ var anchorSchema = kp.object({
   rect: rectSchema
 });
 var PX = "-?\\d+(?:\\.\\d+)?px";
+var SIZE = "\\d+(?:\\.\\d+)?px";
 var moveStyleSchema = kp.object({
   translate: kp.string().regex(new RegExp(`^(?:|${PX} ${PX})$`)),
   left: kp.string().regex(new RegExp(`^(?:|${PX})$`)),
-  top: kp.string().regex(new RegExp(`^(?:|${PX})$`))
+  top: kp.string().regex(new RegExp(`^(?:|${PX})$`)),
+  width: kp.string().regex(new RegExp(`^(?:|${SIZE})$`)),
+  height: kp.string().regex(new RegExp(`^(?:|${SIZE})$`))
 }).partial().refine((style) => Object.keys(style).length > 0, "Nothing to change");
 var textTargetSchema = kp.object({
   dcId: kp.string().min(1).max(120).optional(),
@@ -9053,7 +9056,8 @@ drop the prefix and use \`node .canvas/dc.mjs\` instead. Each prints JSON and ex
 - Put values worth tuning (colors, spacing, radii, font sizes) in CSS custom properties on \`:root\`.
 - When asked for options, add variants as new artboards in one group instead of overwriting.
 - The user can drag elements on the canvas. A move adds \`translate\` (or \`left\`/\`top\` on positioned
-  elements) to that element's inline style, and a dragged artboard gets \`x\` and \`y\` in design.json.
+  elements) to that element's inline style, a resize adds \`width\` and \`height\` in px, and a dragged
+  artboard gets \`x\` and \`y\` in design.json.
   Treat these as the user's intent: keep them, or fold them into proper layout when you revise.
 - The user can also fix text on the canvas; it writes straight into the page. Keep their wording.
 

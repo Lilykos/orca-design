@@ -59,6 +59,7 @@ const en = {
   "toolPreview": "Preview",
   "notMovable": "Only elements with a data-dc-id can be moved. Ask the agent to give this one an id.",
   "notMovableUnit": "This element is placed with percentages, so it can't be dragged here.",
+  "notResizable": "This element's size can't be changed here.",
   "moveConflict": "{{file}} changed on disk, so the move was not saved. The page was reloaded.",
   "moveFailed": "Couldn't save the move: {{error}}",
   "tweaks": "Tweaks",

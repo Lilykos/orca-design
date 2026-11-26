@@ -21,6 +21,13 @@ test('moveElement writes translate on the named element', async () => {
   assert.match(readFileSync(page(root), 'utf8'), /data-dc-id="p" style="translate: 10px 0px;?"/)
 })
 
+test('moveElement writes width and height on the named element', async () => {
+  const root = makeRoot(['minimal'])
+  const { source } = await viewArtboard(root, 'minimal', 'a')
+  await moveElement(root, 'minimal', 'a', 'p', { width: '200px', height: '120px' }, source)
+  assert.match(readFileSync(page(root), 'utf8'), /data-dc-id="p" style="width: 200px; height: 120px;?"/)
+})
+
 test('editText keeps entities around the change', async () => {
   const root = makeRoot(['minimal'])
   const { source } = await viewArtboard(root, 'minimal', 'a')
