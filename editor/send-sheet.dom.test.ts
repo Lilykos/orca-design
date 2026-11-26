@@ -69,7 +69,14 @@ test('the sheet shows the exact request text', async () => {
 })
 
 test('with two agents and none recorded, Send is disabled until one is chosen', async () => {
-  const pending = open({ rows: [row('a', 's1', 'Claude 1'), row('b', 's2', 'Claude 2')], preferred: null })
+  let sent = ''
+  const pending = open({
+    rows: [row('a', 's1', 'Claude 1'), row('b', 's2', 'Claude 2')],
+    preferred: null,
+    onSend: async (terminalId) => {
+      sent = terminalId
+    },
+  })
   const select = host.querySelector('select')!
   const send = byLabel('Send')
   assert.equal(select.value, '')
@@ -77,8 +84,9 @@ test('with two agents and none recorded, Send is disabled until one is chosen', 
   select.value = 'b'
   select.dispatchEvent(new Event('change'))
   assert.equal(send.disabled, false)
-  byLabel('Cancel').click()
-  assert.equal(await pending, false)
+  send.click()
+  assert.equal(await pending, true)
+  assert.equal(sent, 'b')
 })
 
 test('with no agent, only Start Claude is offered', async () => {
@@ -98,14 +106,18 @@ test('with no agent, only Start Claude is offered', async () => {
 
 test('while onSend is pending, Cancel is disabled and Escape does not close the sheet', async () => {
   let finishSend: () => void = () => {}
+  let sent = ''
   const pending = open({
     rows: [row('a', 's1', 'Claude')],
-    onSend: () =>
-      new Promise<void>((resolve) => {
+    onSend: (terminalId) => {
+      sent = terminalId
+      return new Promise<void>((resolve) => {
         finishSend = resolve
-      }),
+      })
+    },
   })
   byLabel('Send').click()
+  assert.equal(sent, 'a')
   assert.equal(byLabel('Cancel').disabled, true)
   host.querySelector('.dc-sheet')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
   assert.notEqual(host.querySelector('.dc-sheet-veil'), null)
