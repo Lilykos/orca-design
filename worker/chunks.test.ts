@@ -16,6 +16,25 @@ test('sliceChunk reassembles a 2 MB string exactly', () => {
   assert.equal(joined, text)
 })
 
+test('sliceChunk reassembles emoji exactly and never ends a piece inside a surrogate pair', () => {
+  // The odd 'a' moves the pairs to odd offsets, so a plain CHUNK boundary falls between the halves.
+  const text = '😀'.repeat(150_000) + 'a' + '🎉'.repeat(150_000)
+  let offset = 0
+  let joined = ''
+  for (;;) {
+    const part = sliceChunk(text, offset)
+    assert.ok(part.chunk.length <= CHUNK)
+    if (!part.done) {
+      const last = part.chunk.charCodeAt(part.chunk.length - 1)
+      assert.ok(last < 0xd800 || last > 0xdbff, `chunk ends in a high surrogate at ${part.offset}`)
+    }
+    joined += part.chunk
+    offset = part.offset
+    if (part.done) break
+  }
+  assert.equal(joined, text)
+})
+
 test('sliceChunk of an empty string is one done chunk', () => {
   assert.deepEqual(sliceChunk('', 0), { chunk: '', offset: 0, total: 0, done: true })
 })

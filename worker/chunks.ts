@@ -13,9 +13,15 @@ export interface Chunk {
   done: boolean;
 }
 
+function isHighSurrogate(code: number): boolean {
+  return code >= 0xd800 && code <= 0xdbff;
+}
+
 export function sliceChunk(text: string, offset: number): Chunk {
   const start = Math.max(0, Math.min(offset, text.length));
-  const end = Math.min(text.length, start + CHUNK);
+  let end = Math.min(text.length, start + CHUNK);
+  // A surrogate pair is two UTF-16 units: a piece never ends between them.
+  if (end < text.length && isHighSurrogate(text.charCodeAt(end - 1))) end--;
   return { chunk: text.slice(start, end), offset: end, total: text.length, done: end >= text.length };
 }
 

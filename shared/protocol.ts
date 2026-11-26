@@ -1,8 +1,8 @@
 // The editor/panel ↔ worker contract. Frames may import only shared code, so constants both
 // sides need live here.
 
-/** Largest piece of text one request answer carries; Orca refuses answers over 1 MiB. */
-export const CHUNK = 786_432;
+/** Largest piece of text one request answer carries; Orca refuses answers over 1 MiB, and 4 bytes per character keeps 256 Ki characters under it. */
+export const CHUNK = 262_144;
 
 import type { Anchor, Comment, CommentStatus, MoveStyle, TextTarget } from "./design";
 import type { TweakValues } from "./tweaks";
