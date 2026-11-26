@@ -52,12 +52,30 @@ export interface HandlerDeps {
   now(): number;
 }
 
-/** Rendered pages kept between the chunk requests of one load. */
-const RENDER_TTL_MS = 60_000;
+/** Rendered pages and exports kept between the chunk requests of one load. */
+const CACHE_TTL_MS = 60_000;
+/** A page rendered this recently, of the same design version, is served from its render at offset 0. */
+const FRESH_MS = 5_000;
+
+interface CachedRender {
+  view: ArtboardView;
+  /** The design's version when the page was rendered (store.designVersion). */
+  version: string;
+  at: number;
+}
+
+/** Drops the entries made more than CACHE_TTL_MS ago. */
+function forget(cache: Map<string, { at: number }>, now: number): void {
+  for (const [key, entry] of cache) if (now - entry.at > CACHE_TTL_MS) cache.delete(key);
+}
+
+function renderKey(root: string, slug: string, artboardId: string): string {
+  return `${root}\0${slug}\0${artboardId}`;
+}
 
 export function registerHandlers(orca: OrcaWorkerApi, deps: HandlerDeps = { now: Date.now }): () => void {
   const host = orca.host as unknown as HostCaller;
-  const renders = new Map<string, { view: ArtboardView; at: number }>();
+  const renders = new Map<string, CachedRender>();
   const exports = new Map<string, { fileName: string; base64: string; at: number }>();
   const uploads = new UploadBuffer();
   const unwatch = new Map<string, () => void>();
@@ -117,19 +135,29 @@ export function registerHandlers(orca: OrcaWorkerApi, deps: HandlerDeps = { now:
     return { initialized, designs, version };
   });
 
-  handle("dc.design", design, async ({ slug }, root) => store.viewDesignMeta(root, slug));
+  // The pages dc.design renders are the ones the editor asks for next, so they are kept for dc.artboard.
+  handle("dc.design", design, async ({ slug }, root) => {
+    const at = deps.now();
+    return store.viewDesignMeta(root, slug, (page, version) => {
+      renders.set(renderKey(root, slug, page.id), { view: page, version, at });
+    });
+  });
 
   handle("dc.version", design, async ({ slug }, root) => ({ version: await store.designVersion(root, slug) }));
 
   handle("dc.artboard", design.extend({ artboardId: slugSchema, offset }), async ({ slug, artboardId, offset: at }, root) => {
-    const key = `${root}\0${slug}\0${artboardId}`;
     const now = deps.now();
-    let cached = renders.get(key);
-    if (at === 0 || !cached || now - cached.at > RENDER_TTL_MS) {
-      cached = { view: await store.viewArtboard(root, slug, artboardId), at: now };
-      renders.set(key, cached);
+    forget(renders, now);
+    forget(exports, now);
+    const key = renderKey(root, slug, artboardId);
+    let entry = renders.get(key);
+    const version = at === 0 || !entry ? await store.designVersion(root, slug) : entry.version;
+    // A load starts at offset 0: a render of this version made a moment ago (by dc.design, say) serves it.
+    if (!entry || entry.version !== version || (at === 0 && now - entry.at >= FRESH_MS)) {
+      entry = { view: await store.viewArtboard(root, slug, artboardId), version, at: now };
+      renders.set(key, entry);
     }
-    const { view } = cached;
+    const { view } = entry;
     const part = sliceChunk(view.html ?? "", at);
     if (part.done) renders.delete(key);
     return { ...part, version: view.version, source: view.source, error: view.error };
@@ -187,11 +215,14 @@ export function registerHandlers(orca: OrcaWorkerApi, deps: HandlerDeps = { now:
   handle("dc.trash", design, async ({ slug }, root) => store.trashDesign(root, slug, deps.now()));
 
   handle("dc.export", design.extend({ offset }), async ({ slug, offset: at }, root) => {
+    const now = deps.now();
+    forget(renders, now);
+    forget(exports, now);
     const key = `${root}\0${slug}`;
     let cached = exports.get(key);
     if (at === 0 || !cached) {
       const { fileName, zip } = await store.exportDesign(root, slug);
-      cached = { fileName, base64: zip.toString("base64"), at: deps.now() };
+      cached = { fileName, base64: zip.toString("base64"), at: now };
       exports.set(key, cached);
     }
     const part = sliceChunk(cached.base64, at);

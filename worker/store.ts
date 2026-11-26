@@ -647,9 +647,13 @@ export async function viewDesign(root: string, slug: string): Promise<DesignView
   return { slug, manifest: read.manifest, error: commentsError, artboards, comments, tweakValues, version };
 }
 
-/** The design without page HTML: the editor fetches each page in chunks (dc.artboard). */
-export async function viewDesignMeta(root: string, slug: string): Promise<DesignView> {
+/**
+ * The design without page HTML: the editor fetches each page in chunks (dc.artboard). `keep` gets
+ * each page as it was rendered, with the design's version, so the worker need not render it again.
+ */
+export async function viewDesignMeta(root: string, slug: string, keep?: (page: ArtboardView, version: string) => void): Promise<DesignView> {
   const view = await viewDesign(root, slug);
+  for (const page of view.artboards) keep?.(page, view.version);
   return { ...view, artboards: view.artboards.map((artboard) => ({ ...artboard, html: null })) };
 }
 
