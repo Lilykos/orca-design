@@ -9328,7 +9328,8 @@ async function refreshGuide(root) {
   await mkdir(canvas, { recursive: true });
   await assertInsideDesign(root, canvas);
   await writeIfChanged(path3.join(canvas, "GUIDE.md"), DESIGN_GUIDE);
-  await writeIfChanged(path3.join(canvas, ".gitignore"), "*\n");
+  const ignore = path3.join(canvas, ".gitignore");
+  if (await readOrNull(ignore) === null) await writeFileAtomic(ignore, "*\n");
   const asset = cliAsset();
   const cli = asset ? await readOrNull(asset) : null;
   if (cli) await writeIfChanged(path3.join(base2, CLI_FILE), cli);
