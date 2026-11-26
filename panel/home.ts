@@ -6,7 +6,7 @@ import { CHUNK } from "../shared/protocol";
 import { buildSrcdoc } from "../editor/runtime";
 import { readChunks } from "../editor/api";
 
-const request = (name: string, input: unknown) => orca.plugin.request(name as never, input as never) as Promise<any>;
+const request = (name: string, input: unknown, options?: { timeoutMs: number }) => orca.plugin.request(name as never, input as never, options) as Promise<any>;
 
 const css = `
 :root { color-scheme: light dark; }
@@ -30,7 +30,7 @@ select { min-width: 0; flex: 1; height: 28px; border: 1px solid var(--orca-input
 .design { display: block; width: 100%; text-align: left; padding: 0; border: 1px solid var(--orca-border); border-radius: var(--orca-radius, 8px); overflow: hidden;
   background: var(--orca-card); color: inherit; font: inherit; cursor: pointer; }
 .design:hover { border-color: var(--orca-ring); }
-.thumb { position: relative; overflow: hidden; background: #fff; height: 150px; pointer-events: none; }
+.thumb { position: relative; overflow: hidden; background: var(--orca-muted); height: 150px; pointer-events: none; }
 .thumb iframe { position: absolute; left: 0; top: 0; border: 0; transform-origin: 0 0; }
 .meta { padding: 8px 10px; }
 .meta b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -106,30 +106,49 @@ function renderTabs(): void {
   sub.style.display = kind === "other" ? "none" : "";
 }
 
-function renderWorkspaces(): void {
-  const keep = chosenWs ?? wsSelect.value;
-  wsSelect.textContent = "";
-  for (const ws of workspaces) wsSelect.append(new Option(ws.project && ws.project !== ws.name ? `${ws.project} · ${ws.name}` : ws.name, ws.ws));
-  if (keep && workspaces.some((ws) => ws.ws === keep)) wsSelect.value = keep;
+// Fix #11: no workspace is ever picked for the person. Until one is chosen, Create and Import stay disabled.
+let starting = false;
+function syncActions(): void {
+  create.disabled = starting || !wsSelect.value;
+  importButton.disabled = !wsSelect.value;
 }
-wsSelect.addEventListener("change", () => (chosenWs = wsSelect.value));
+
+function renderWorkspaces(): void {
+  const keep = wsSelect.value || chosenWs;
+  wsSelect.textContent = "";
+  const placeholder = new Option("Choose a workspace…", "");
+  placeholder.disabled = true;
+  wsSelect.append(placeholder);
+  for (const ws of workspaces) wsSelect.append(new Option(ws.project && ws.project !== ws.name ? `${ws.project} · ${ws.name}` : ws.name, ws.ws));
+  wsSelect.selectedIndex = 0;
+  if (keep && workspaces.some((ws) => ws.ws === keep)) wsSelect.value = keep;
+  chosenWs = wsSelect.value || null;
+  syncActions();
+}
+wsSelect.addEventListener("change", () => {
+  chosenWs = wsSelect.value || null;
+  syncActions();
+});
 
 async function startDesign(): Promise<void> {
   const text = brief.value.trim();
   const ws = wsSelect.value;
   if (!text || !ws) return;
-  create.disabled = true;
+  starting = true;
+  syncActions();
   message.textContent = "";
   try {
+    await orca.storage.set("home:lastWs", ws);
     const known = designs.filter((design) => design.ws === ws).map((design) => design.slug);
     await orca.storage.set(`expectNew:${ws}`, known);
-    await request("dc.start", { ws, brief: text, ...(kind === "other" ? {} : { kind }), agent: agentSelect.value });
+    await request("dc.start", { ws, brief: text, ...(kind === "other" ? {} : { kind }), agent: agentSelect.value }, { timeoutMs: 120000 });
     await request("dc.openCanvas", { ws });
     brief.value = "";
   } catch (error) {
     message.textContent = error instanceof Error ? error.message : String(error);
   } finally {
-    create.disabled = false;
+    starting = false;
+    syncActions();
   }
 }
 create.addEventListener("click", () => void startDesign());
@@ -142,13 +161,18 @@ brief.addEventListener("keydown", (event) => {
 
 async function importZip(file: File | null): Promise<void> {
   const ws = wsSelect.value;
-  if (!file || !ws) return;
+  if (!file) return;
+  if (!ws) {
+    message.textContent = "Choose a workspace first.";
+    return;
+  }
   message.textContent = "";
   try {
+    await orca.storage.set("home:lastWs", ws);
     const base64 = await fileToBase64(file);
     const { id } = await request("dc.import.begin", { ws });
     for (let at = 0; at < base64.length; at += CHUNK) await request("dc.import.part", { ws, id, part: base64.slice(at, at + CHUNK) });
-    const result = await request("dc.import.commit", { ws, id });
+    const result = await request("dc.import.commit", { ws, id }, { timeoutMs: 120000 });
     await request("dc.open", { ws, slug: result.slug });
     await refresh();
   } catch (error) {
@@ -203,9 +227,11 @@ async function loadCover(thumb: HTMLElement): Promise<void> {
     frame.setAttribute("sandbox", "allow-scripts");
     frame.setAttribute("scrolling", "no");
     frame.tabIndex = -1;
-    const scale = thumb.clientWidth / last.width;
+    // Fix #21: a narrow artboard is never scaled up; it is centred on the muted thumbnail background.
+    const scale = Math.min(1, thumb.clientWidth / last.width);
     frame.style.width = `${last.width}px`;
     frame.style.height = `${Math.ceil(150 / scale)}px`;
+    frame.style.left = `${Math.max(0, (thumb.clientWidth - last.width * scale) / 2)}px`;
     frame.style.transform = `scale(${scale})`;
     // A thumbnail never scrolls.
     frame.srcdoc = buildSrcdoc(text).replace(/<\/head>/i, "<style>html,body{overflow:hidden!important}</style></head>");
@@ -233,30 +259,50 @@ function renderList(): void {
   }
 }
 
+// Fix #10: a refresh asked for while one runs queues exactly one more, so no change is dropped.
 let refreshing = false;
+let refreshAgain = false;
 async function refresh(): Promise<void> {
-  if (refreshing) return;
+  if (refreshing) {
+    refreshAgain = true;
+    return;
+  }
   refreshing = true;
   try {
-    const home = await request("dc.home", {});
-    workspaces = home.workspaces;
-    const changed = JSON.stringify(home.designs.map((d: HomeDesign) => [d.ws, d.slug, d.updatedAt])) !== JSON.stringify(designs.map((d) => [d.ws, d.slug, d.updatedAt]));
-    designs = home.designs;
-    renderWorkspaces();
-    if (changed) renderList();
+    do {
+      refreshAgain = false;
+      await loadHome();
+    } while (refreshAgain);
   } finally {
     refreshing = false;
   }
 }
 
+async function loadHome(): Promise<void> {
+  const home = await request("dc.home", {});
+  workspaces = home.workspaces;
+  const changed = JSON.stringify(home.designs.map((d: HomeDesign) => [d.ws, d.slug, d.updatedAt])) !== JSON.stringify(designs.map((d) => [d.ws, d.slug, d.updatedAt]));
+  designs = home.designs;
+  renderWorkspaces();
+  if (changed) renderList();
+}
+
+/** Fix #11: the focused workspace, else the one the panel last used; null otherwise. */
+async function initialWorkspace(): Promise<string | null> {
+  try {
+    const { ws } = await request("dc.focused", {});
+    if (ws) return ws;
+  } catch {
+    // Fall back to the last workspace used.
+  }
+  const last = await orca.storage.get("home:lastWs").catch(() => null);
+  return typeof last === "string" ? last : null;
+}
+
 document.body.append(startCard, el("h2", "", "Recent"), list);
 renderTabs();
-try {
-  const context = (await orca.host.call("workspace.readContext", {})) as { workspaceId?: string } | null;
-  chosenWs = context?.workspaceId ?? null;
-} catch {
-  chosenWs = null;
-}
+syncActions();
+chosenWs = await initialWorkspace();
 await refresh();
 orca.plugin.on("dc.changed", () => void refresh());
 orca.on("workspace.created", () => void refresh());

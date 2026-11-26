@@ -6,9 +6,9 @@ import * as main from './index.ts'
 import { initCanvas } from './store.ts'
 import { resetWorkspaceCache } from './workspace.ts'
 
-async function boot(map: Record<string, string>) {
+async function boot(map: Record<string, string>, context: unknown = null) {
   resetWorkspaceCache()
-  const host = mockHost({ results: { ...workspaces(map), 'workspace.open': { opened: true }, 'editor.open': { opened: true }, 'statusBar.update': {} } })
+  const host = mockHost({ results: { ...workspaces(map), 'workspace.readContext': context, 'workspace.open': { opened: true }, 'editor.open': { opened: true }, 'statusBar.update': {} } })
   return { host, worker: await mountWorker(main, { host }) }
 }
 
@@ -51,4 +51,15 @@ test('dc.open shows the workspace, then opens its canvas on that design', async 
   assert.deepEqual(order, ['workspace.open', 'editor.open'])
   assert.equal(host.data().storage['open:wa'], 'minimal')
   await worker.deactivate()
+})
+
+test('dc.focused answers the focused workspace by id, and null when the focus matches no workspace', async () => {
+  const a = makeRoot([])
+  const b = makeRoot([])
+  const byId = await boot({ wa: a, wb: b }, { workspaceId: 'wb', branch: 'main', displayName: 'x', terminals: [] })
+  assert.deepEqual(await byId.worker.request('dc.focused', {}), { ws: 'wb' })
+  await byId.worker.deactivate()
+  const unknown = await boot({ wa: a, wb: b }, { workspaceId: 'repo::/elsewhere', branch: 'main', displayName: 'nowhere', terminals: [] })
+  assert.deepEqual(await unknown.worker.request('dc.focused', {}), { ws: null })
+  await unknown.worker.deactivate()
 })

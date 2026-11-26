@@ -19,7 +19,7 @@ export async function listHome(host: HostCaller): Promise<{ designs: HomeDesign[
   await Promise.all(
     rows.map(async (row) => {
       const root = designHome(row.path);
-      // Worktrees of one folder show its designs once.
+      // Dedupe by the folder that holds design/: a workspace opened at design/ maps to its parent, so the two show its designs once.
       if (seen.has(root)) return;
       seen.add(root);
       if (!(await store.isInitialized(root).catch(() => false))) return;
@@ -43,10 +43,25 @@ export async function listHome(host: HostCaller): Promise<{ designs: HomeDesign[
   return { designs: designs.slice(0, RECENT), workspaces };
 }
 
+/**
+ * The focused workspace, as the id `workspace.list` uses. Folder workspaces can come back from
+ * `workspace.readContext` under another id, so match the name and branch too; null when neither
+ * names exactly one row, so the panel never guesses an unrelated workspace.
+ */
+export async function focusedWorkspace(host: HostCaller): Promise<string | null> {
+  const context = (await host.call("workspace.readContext", {})) as { workspaceId?: string; displayName: string; branch: string } | null;
+  if (!context) return null;
+  const rows = await listWorkspaceRows(host, true);
+  if (context.workspaceId && rows.some((row) => row.id === context.workspaceId)) return context.workspaceId;
+  const matches = rows.filter((row) => row.name === context.displayName && row.branch === context.branch);
+  return matches.length === 1 ? matches[0]!.id : null;
+}
+
 export function registerHome(orca: OrcaWorkerApi, handle: (name: string, schema: z.ZodType, fn: (input: any, root: string) => Promise<unknown>) => void): void {
   const host = orca.host as unknown as HostCaller;
 
   orca.panels.handle("dc.home" as never, (async () => listHome(host)) as never);
+  orca.panels.handle("dc.focused" as never, (async () => ({ ws: await focusedWorkspace(host) })) as never);
 
   // Rendered once per load (offset 0) and reused for its later chunks, like dc.artboard.
   const covers = new Map<string, { view: ArtboardView; at: number }>();
