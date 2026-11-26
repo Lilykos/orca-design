@@ -549,7 +549,10 @@ export async function importDesign(root: string, zip: Buffer): Promise<ImportRes
     const rel = segments!;
     if (rel.length <= prefix.length || prefix.some((segment, i) => rel[i] !== segment)) continue;
     const inner = rel.slice(prefix.length);
-    if (inner[0] === from) own.push({ rel: inner.slice(1), data: entry.data });
+    // Dot-folders inside the design (.requests/) are left out, as exportDesign leaves them out; older zips still carry them.
+    if (inner[0] === from) {
+      if (!inner.slice(1).some((segment) => segment.startsWith("."))) own.push({ rel: inner.slice(1), data: entry.data });
+    }
     else if (inner.length >= 2 && !RESERVED.has(inner[0]!) && !inner[0]!.startsWith(".")) shared.push({ rel: inner, data: entry.data });
   }
 

@@ -1,5 +1,5 @@
 import { assert, test } from 'orca/testing'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { makeRoot } from '../tests/helpers.ts'
 import { exportDesign, importDesign } from './store.ts'
@@ -28,6 +28,17 @@ test('export leaves out dot-folders such as the request history', async () => {
   const names = readZip(zip).map((entry) => entry.name)
   assert.ok(names.includes('minimal/design.json'))
   assert.ok(!names.some((name) => name.split('/').includes('.requests')))
+})
+
+test('import leaves out dot-folders, as zips exported before that fix still carry .requests/', async () => {
+  const to = makeRoot([])
+  const zip = writeZip([
+    { name: 'minimal/design.json', data: Buffer.from(readFileSync('tests/fixtures/minimal/design.json')), mtime: Date.now() },
+    { name: 'minimal/.requests/x.md', data: Buffer.from('Fix the title\n'), mtime: Date.now() }
+  ])
+  const { slug } = await importDesign(to, zip)
+  assert.ok(existsSync(path.join(to, 'design', slug, 'design.json')))
+  assert.ok(!existsSync(path.join(to, 'design', slug, '.requests')))
 })
 
 test('import refuses an entry that leaves the folder', async () => {
