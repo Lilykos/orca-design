@@ -42,6 +42,10 @@ function stamp(now: number): string {
 /** Writes the prompt to design/[<slug>/].requests/<stamp>-<kind>.md; returns the workspace-relative path. */
 export async function writeRequest(root: string, slug: string | null, kind: RequestKind, text: string, now = Date.now()): Promise<string> {
   const dir = slug ? path.join(DESIGN_DIR, slug, REQUESTS_DIR) : path.join(DESIGN_DIR, REQUESTS_DIR);
+  // The parent is checked before .requests is created, so nothing is made through a link out of design/.
+  const parent = slug ? path.join(root, DESIGN_DIR, slug) : path.join(root, DESIGN_DIR);
+  await mkdir(parent, { recursive: true });
+  await assertInsideDesign(root, parent);
   const folder = path.join(root, dir);
   await mkdir(folder, { recursive: true });
   await assertInsideDesign(root, folder);
