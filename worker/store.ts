@@ -471,6 +471,9 @@ export async function exportDesign(root: string, slug: string): Promise<{ fileNa
   for (const file of files) {
     const relative = path.relative(base, file);
     if (relative.startsWith("..") || path.isAbsolute(relative) || relative.endsWith(".tmp")) continue;
+    // Dot-folders inside the design (.requests/, the request history) do not travel with it.
+    const parts = path.relative(dir, file).split(path.sep);
+    if (parts[0] !== ".." && parts.some((part) => part.startsWith("."))) continue;
     const name = relative.split(path.sep).join("/");
     if (names.has(name)) continue;
     let info;
