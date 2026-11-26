@@ -5,6 +5,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir as mkdir2, stat as stat3, writeFile as writeFile2 } from "node:fs/promises";
 import path4 from "node:path";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // vendor/zod.js
 var wp = Object.defineProperty;
@@ -8976,6 +8977,10 @@ async function resolveInside(allowedRoot, fromDir, reference) {
   if (!within(realRoot, realTarget)) throw new PathError(`${reference} links outside ${allowedRoot}`);
   return realTarget;
 }
+async function assertInsideDesign(workspaceRoot, folder) {
+  const [realBase, realFolder] = await Promise.all([realpath(designRoot(workspaceRoot)), realpath(folder)]);
+  if (!within(realBase, realFolder)) throw new PathError(`${folder} links outside ${designRoot(workspaceRoot)}`);
+}
 
 // worker/store.ts
 import { randomBytes, createHash } from "node:crypto";
@@ -8993,7 +8998,8 @@ points at elements and writes comments, and asks you to revise.
 
 ## The canvas CLI
 
-Run these from the workspace root. Each prints JSON and exits 0 (ok), 1 (usage) or 2 (invalid).
+Run these from the folder that contains \`design/\`. When your workspace is the \`design/\` folder itself,
+drop the prefix and use \`node .canvas/dc.mjs\` instead. Each prints JSON and exits 0 (ok), 1 (usage) or 2 (invalid).
 
 - \`${CLI2} create <slug> '<json>'\`: makes \`design/<slug>/\` with design.json and a placeholder page per
   artboard, which you then overwrite. The JSON is \`{"title", "kind", "description"?, "artboards": [{"id",
@@ -9318,7 +9324,11 @@ async function writeIfChanged(file, text) {
 }
 async function refreshGuide(root) {
   const base2 = designRoot(root);
-  await writeIfChanged(path3.join(base2, ".canvas", "GUIDE.md"), DESIGN_GUIDE);
+  const canvas = path3.join(base2, ".canvas");
+  await mkdir(canvas, { recursive: true });
+  await assertInsideDesign(root, canvas);
+  await writeIfChanged(path3.join(canvas, "GUIDE.md"), DESIGN_GUIDE);
+  await writeIfChanged(path3.join(canvas, ".gitignore"), "*\n");
   const asset = cliAsset();
   const cli = asset ? await readOrNull(asset) : null;
   if (cli) await writeIfChanged(path3.join(base2, CLI_FILE), cli);
@@ -9515,6 +9525,8 @@ var Exit = class extends Error {
 var usage = (message) => new Exit(1, { ok: false, error: message, usage: USAGE });
 var invalid = (message, extra = {}) => new Exit(2, { ok: false, error: message, ...extra });
 function findRoot(from) {
+  const self = fileURLToPath2(import.meta.url);
+  if (self.endsWith(path4.sep + path4.join(DESIGN_DIR, CLI_FILE))) return path4.dirname(path4.dirname(path4.dirname(self)));
   for (let dir = path4.resolve(from); ; dir = path4.dirname(dir)) {
     if (existsSync(path4.join(dir, DESIGN_DIR)) && path4.basename(dir) !== DESIGN_DIR) return dir;
     if (path4.dirname(dir) === dir) return path4.resolve(from);
