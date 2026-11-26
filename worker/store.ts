@@ -744,7 +744,7 @@ function patchPage(
   });
 }
 
-/** Writes a moved element's position into the inline style of the element with this data-dc-id. */
+/** Writes a moved or resized element's style into the inline style of the element with this data-dc-id. */
 export function moveElement(
   root: string,
   slug: string,
