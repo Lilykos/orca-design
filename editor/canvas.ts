@@ -1007,12 +1007,18 @@ export function mountCanvas(options: CanvasOptions): CanvasHandle {
     }
   }
 
-  /** Nudges arrive one per key press: merge them and write once the keys go quiet. */
+  /** Nudges and drags arrive as they happen: merge them and write once they go quiet (first before, last after, per property). */
   function queueMove(board: Board, dcId: string, before: MoveStyle, after: MoveStyle): void {
     const key = `${board.view.id}\u0000${dcId}`;
     const existing = pendingMoves.get(key);
     if (existing) clearTimeout(existing.timer);
-    const entry = { board, dcId, before: existing?.before ?? before, after, timer: setTimeout(() => void flush(key), 250) };
+    const entry = {
+      board,
+      dcId,
+      before: { ...before, ...existing?.before },
+      after: { ...existing?.after, ...after },
+      timer: setTimeout(() => void flush(key), 250),
+    };
     pendingMoves.set(key, entry);
   }
 
@@ -1980,6 +1986,7 @@ export function mountCanvas(options: CanvasOptions): CanvasHandle {
         handleKey(message.key, message.meta, message.shift);
         break;
       case "moved":
+      case "resized":
         if (mode === "move") queueMove(board, message.dcId, message.before, message.after);
         break;
       case "text-edited":
